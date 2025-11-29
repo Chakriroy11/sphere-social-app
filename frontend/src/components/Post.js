@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import postService from '../services/postService';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
-// Added Pen, Check, Times icons
 import { FaHeart, FaRegHeart, FaRegComment, FaTrashAlt, FaBookmark, FaRegBookmark, FaMapMarkerAlt, FaPen, FaCheck, FaTimes } from 'react-icons/fa';
 
 const timeAgo = (date) => {
@@ -42,12 +41,12 @@ const Post = ({ post, onDelete }) => {
     const [commentText, setCommentText] = useState('');
     const [saved, setSaved] = useState(false);
 
-    // EDIT MODE STATES
+    // Edit Mode
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(post.content);
     const [displayContent, setDisplayContent] = useState(post.content);
 
-    const imageUrl = post.imageUrl ? `http://localhost:5000${post.imageUrl}` : null;
+    const imageUrl = post.imageUrl ? `https://sphere-backend-2mx3.onrender.com${post.imageUrl}` : null;
     const isOwner = user && post.author._id === user._id;
     const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm'));
 
@@ -58,15 +57,12 @@ const Post = ({ post, onDelete }) => {
     const handleDelete = async () => { if (window.confirm("Delete this post?")) { try { await postService.deletePost(post._id); onDelete(post._id); } catch (error) { console.error(error); } } };
     const handleComment = async (e) => { e.preventDefault(); if (!commentText.trim()) return; try { const response = await postService.addComment(post._id, commentText); setComments(response.data.comments); setCommentText(''); } catch (error) { console.error(error); } };
 
-    // Handle Edit Submit
     const handleUpdate = async () => {
         try {
             await postService.updatePost(post._id, editContent);
-            setDisplayContent(editContent); // Update UI
-            setIsEditing(false); // Close edit mode
-        } catch (error) {
-            alert("Failed to update post");
-        }
+            setDisplayContent(editContent);
+            setIsEditing(false);
+        } catch (error) { alert("Failed to update post"); }
     };
 
     return (
@@ -74,7 +70,7 @@ const Post = ({ post, onDelete }) => {
             <div style={s.header}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {post.author.profilePic ? (
-                        <img src={`http://localhost:5000${post.author.profilePic}`} alt="avatar" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src={`https://sphere-backend-2mx3.onrender.com${post.author.profilePic}`} alt="avatar" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
                     ) : (
                         <div style={s.avatarPlaceholder}>{post.author.username[0].toUpperCase()}</div>
                     )}
@@ -85,27 +81,17 @@ const Post = ({ post, onDelete }) => {
                     </div>
                 </div>
                 
-                {/* Edit/Delete Actions */}
                 {isOwner && (
                     <div style={{display: 'flex', gap: '10px'}}>
-                        <button onClick={() => setIsEditing(!isEditing)} style={s.actionIconBtn}>
-                            <FaPen size={14} color={theme.textSecondary} />
-                        </button>
-                        <button onClick={handleDelete} style={s.actionIconBtn}>
-                            <FaTrashAlt size={14} color="#dc3545" />
-                        </button>
+                        <button onClick={() => setIsEditing(!isEditing)} style={s.actionIconBtn}><FaPen size={14} color={theme.textSecondary} /></button>
+                        <button onClick={handleDelete} style={s.actionIconBtn}><FaTrashAlt size={14} color="#dc3545" /></button>
                     </div>
                 )}
             </div>
 
-            {/* Content Logic: Edit vs View */}
             {isEditing ? (
                 <div style={{marginBottom: '10px'}}>
-                    <textarea 
-                        value={editContent} 
-                        onChange={(e) => setEditContent(e.target.value)} 
-                        style={s.editTextarea}
-                    />
+                    <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} style={s.editTextarea} />
                     <div style={{display: 'flex', gap: '10px', marginTop: '5px'}}>
                         <button onClick={handleUpdate} style={s.saveBtn}><FaCheck /> Save</button>
                         <button onClick={() => setIsEditing(false)} style={s.cancelBtn}><FaTimes /> Cancel</button>
@@ -115,7 +101,7 @@ const Post = ({ post, onDelete }) => {
                 <div style={s.content}>{renderContentWithTags(displayContent)}</div>
             )}
             
-            {imageUrl && (isVideo(imageUrl) ? <video controls style={s.image} loop muted playsInline><source src={imageUrl} type="video/mp4" /></video> : <img src={imageUrl} alt="Post" style={s.image} />)}
+            {imageUrl && (isVideo(imageUrl) ? <video controls style={s.image} loop muted playsInline><source src={imageUrl} /></video> : <img src={imageUrl} alt="Post" style={s.image} />)}
 
             <div style={s.actions}>
                 <div style={{display: 'flex', gap: '20px'}}>
@@ -143,12 +129,9 @@ const styles = (theme) => ({
     time: { color: theme.textSecondary, fontSize: '0.8rem' },
     actionIconBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: '5px' },
     content: { marginBottom: '15px', lineHeight: '1.5', color: theme.text },
-    
-    // Edit Styles
-    editTextarea: { width: '100%', padding: '8px', borderRadius: '5px', border: `1px solid ${theme.border}`, backgroundColor: theme.inputBg, color: theme.text, fontFamily: 'inherit', resize: 'vertical' },
-    saveBtn: { backgroundColor: '#28a745', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.9rem' },
-    cancelBtn: { backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.9rem' },
-
+    editTextarea: { width: '100%', padding: '8px', borderRadius: '5px', border: `1px solid ${theme.border}`, backgroundColor: theme.inputBg, color: theme.text, fontFamily: 'inherit' },
+    saveBtn: { backgroundColor: '#28a745', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' },
+    cancelBtn: { backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' },
     image: { width: '100%', borderRadius: '4px', border: `1px solid ${theme.border}`, marginBottom: '12px' },
     actions: { display: 'flex', gap: '20px', borderTop: `1px solid ${theme.border}`, paddingTop: '12px' },
     actionBtn: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: theme.text, fontSize: '1rem' },

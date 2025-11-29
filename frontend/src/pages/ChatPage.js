@@ -5,7 +5,9 @@ import { AuthContext } from '../context/AuthContext';
 import { Link, useParams } from 'react-router-dom';
 import { FaCheckDouble } from 'react-icons/fa';
 
+// UPDATED TO RENDER URL
 const socket = io.connect("https://sphere-backend-2mx3.onrender.com");
+const API_BASE = "https://sphere-backend-2mx3.onrender.com/api";
 
 const ChatPage = () => {
     const { user, onlineUsers } = useContext(AuthContext);
@@ -16,18 +18,15 @@ const ChatPage = () => {
     const [currentMessage, setCurrentMessage] = useState("");
     const [messageList, setMessageList] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
-    
     const messagesEndRef = useRef(null);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
+    const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); };
 
     const fetchHistory = async (id) => {
         try {
-            const res = await axios.get(`https://sphere-backend-2mx3.onrender.com/api/messages/${id}`);
+            const res = await axios.get(`${API_BASE}/messages/${id}`);
             setMessageList(res.data);
-            await axios.put(`https://sphere-backend-2mx3.onrender.com/api/messages/read/${id}`, { username: user.username });
+            await axios.put(`${API_BASE}/messages/read/${id}`, { username: user.username });
             scrollToBottom();
         } catch (err) { console.error(err); }
     };
@@ -58,12 +57,11 @@ const ChatPage = () => {
                 text: currentMessage,
                 time: new Date(Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
-
             await socket.emit("send_message", messageData);
             setMessageList((list) => [...list, messageData]);
             setCurrentMessage("");
             socket.emit("stop_typing", { room: room }); 
-            await axios.post("https://sphere-backend-2mx3.onrender.com/api/messages", messageData);
+            await axios.post(`${API_BASE}/messages`, messageData);
         }
     };
 
@@ -79,22 +77,16 @@ const ChatPage = () => {
     useEffect(() => { scrollToBottom(); }, [messageList, isTyping]);
 
     useEffect(() => {
-        const receiveMessage = (data) => {
-            setMessageList((list) => [...list, data]);
-        };
-        
+        const receiveMessage = (data) => { setMessageList((list) => [...list, data]); };
         socket.on("receive_message", receiveMessage);
-        socket.on("display_typing", (data) => {
-            if (data.user !== user.username) setIsTyping(true);
-        });
+        socket.on("display_typing", (data) => { if (data.user !== user.username) setIsTyping(true); });
         socket.on("hide_typing", () => setIsTyping(false));
-
         return () => { 
             socket.off("receive_message", receiveMessage); 
             socket.off("display_typing");
             socket.off("hide_typing");
         };
-    }, [socket, user.username]);
+    }, [user.username]);
 
     const getOtherUserId = () => {
         if (!roomId) return null;
@@ -109,7 +101,6 @@ const ChatPage = () => {
             <div style={styles.topBar}>
                 <Link to="/" style={styles.backLink}>← Back to Feed</Link>
             </div>
-
             {!showChat ? (
                 <div style={styles.joinCard}>
                     <h2 style={{marginBottom: '20px', color: '#333'}}>💬 Join Conversation</h2>
@@ -121,15 +112,10 @@ const ChatPage = () => {
                     <div style={styles.chatHeader}>
                         <div style={{...styles.onlineDot, backgroundColor: isOnline ? '#31a24c' : '#ccc'}}></div>
                         <div style={{display: 'flex', flexDirection: 'column'}}>
-                            <span style={{fontWeight: 'bold', fontSize: '1.1rem'}}>
-                                {roomId ? "Private Conversation" : `#${room}`}
-                            </span>
-                            <span style={{fontSize: '0.8rem', color: isOnline ? '#31a24c' : '#999'}}>
-                                {isOnline ? 'Online' : 'Offline'}
-                            </span>
+                            <span style={{fontWeight: 'bold', fontSize: '1.1rem'}}>{roomId ? "Private Conversation" : `#${room}`}</span>
+                            <span style={{fontSize: '0.8rem', color: isOnline ? '#31a24c' : '#999'}}>{isOnline ? 'Online' : 'Offline'}</span>
                         </div>
                     </div>
-
                     <div style={styles.chatBody}>
                         {messageList.map((msg, index) => {
                             const isMe = msg.sender === user.username;
@@ -146,26 +132,11 @@ const ChatPage = () => {
                                 </div>
                             );
                         })}
-                        
-                        {isTyping && (
-                            <div style={styles.messageRowOther}>
-                                <div style={{...styles.bubbleOther, fontStyle: 'italic', color: '#888'}}>
-                                    Typing...
-                                </div>
-                            </div>
-                        )}
+                        {isTyping && <div style={styles.messageRowOther}><div style={{...styles.bubbleOther, fontStyle: 'italic', color: '#888'}}>Typing...</div></div>}
                         <div ref={messagesEndRef} />
                     </div>
-
                     <div style={styles.chatFooter}>
-                        <input
-                            type="text"
-                            value={currentMessage}
-                            placeholder="Type a message..."
-                            onChange={handleInput}
-                            onKeyPress={(event) => { event.key === "Enter" && sendMessage(); }}
-                            style={styles.chatInput}
-                        />
+                        <input type="text" value={currentMessage} placeholder="Type a message..." onChange={handleInput} onKeyPress={(event) => { event.key === "Enter" && sendMessage(); }} style={styles.chatInput} />
                         <button onClick={sendMessage} style={styles.sendBtn}>➤</button>
                     </div>
                 </div>

@@ -6,7 +6,6 @@ import io from 'socket.io-client';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Pages
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import HomePage from './pages/HomePage';
@@ -15,8 +14,9 @@ import ChatPage from './pages/ChatPage';
 import SearchPage from './pages/SearchPage';
 import NotificationsPage from './pages/NotificationsPage';
 import SettingsPage from './pages/SettingsPage';
-import HashtagPage from './pages/HashtagPage'; // Import
+import HashtagPage from './pages/HashtagPage';
 
+// UPDATED TO RENDER URL
 const socket = io.connect("https://sphere-backend-2mx3.onrender.com");
 
 const RequireAuth = ({ children }) => {
@@ -61,7 +61,6 @@ const AppRoutes = () => {
                 <Route path="/notifications" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
                 <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
                 <Route path="/chat/:roomId?" element={<RequireAuth><ChatPage /></RequireAuth>} />
-                {/* NEW TAG ROUTE */}
                 <Route path="/tags/:tag" element={<RequireAuth><HashtagPage /></RequireAuth>} />
             </Routes>
         </div>

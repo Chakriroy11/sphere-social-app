@@ -1,5 +1,6 @@
 import axios from 'axios';
 
+// UPDATED TO RENDER URL
 const API_URL = 'https://sphere-backend-2mx3.onrender.com/api/users/';
 
 const getToken = () => {
@@ -18,18 +19,21 @@ const followUser = (userId) => {
 
 const updateUser = (userId, data) => {
     const token = getToken();
-    const config = { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } };
+    const config = { 
+        headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+        } 
+    };
     return axios.put(API_URL + userId, data, config);
 };
 
-// Change Password
 const changePassword = (userId, data) => {
     const token = getToken();
     const config = { headers: { Authorization: `Bearer ${token}` } };
     return axios.put(API_URL + userId + '/password', data, config);
 };
 
-// Delete Account
 const deleteAccount = (userId) => {
     const token = getToken();
     const config = { headers: { Authorization: `Bearer ${token}` } };

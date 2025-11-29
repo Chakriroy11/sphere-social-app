@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// USE 127.0.0.1 to fix Windows connection issues
+// UPDATED TO RENDER URL
 const API_URL = 'https://sphere-backend-2mx3.onrender.com/api/auth/';
 
 const register = (username, email, password) => {

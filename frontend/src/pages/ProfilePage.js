@@ -8,7 +8,6 @@ import { ThemeContext } from '../context/ThemeContext';
 import { FaArrowLeft, FaSignOutAlt, FaPen, FaCamera, FaTimes, FaHeart, FaComment, FaEnvelope, FaSun, FaMoon, FaVideo, FaCog } from 'react-icons/fa';
 import io from 'socket.io-client';
 
-// Connect Socket for Follow Notifications
 const socket = io.connect("https://sphere-backend-2mx3.onrender.com");
 
 const ProfilePage = () => {
@@ -22,7 +21,6 @@ const ProfilePage = () => {
     const [loading, setLoading] = useState(true);
     const [isFollowing, setIsFollowing] = useState(false);
     
-    // Edit States
     const [editMode, setEditMode] = useState(false);
     const [bio, setBio] = useState("");
     const [file, setFile] = useState(null);
@@ -30,67 +28,37 @@ const ProfilePage = () => {
     const [hoveredPostId, setHoveredPostId] = useState(null);
 
     const isMyProfile = user && user._id === userId;
-
-    // Helper for Video Thumbnails
     const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm'));
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Get User Info
                 const userRes = await userService.getUser(userId);
                 setProfileUser(userRes.data);
                 setBio(userRes.data.bio || "");
                 setIsFollowing(userRes.data.followers.includes(user?._id));
 
-                // Get User Posts
                 const postsRes = await postService.getPostsByUser(userId);
                 setPosts(postsRes.data);
-            } catch (error) { console.error("Error fetching profile", error); } 
+            } catch (error) { console.error("Error", error); } 
             finally { setLoading(false); }
         };
         fetchData();
     }, [userId, user._id]);
 
-    // --- HANDLE FOLLOW / UNFOLLOW ---
     const handleFollow = async () => {
         try {
             await userService.followUser(userId);
-            
-            // Toggle State locally
             setIsFollowing(!isFollowing);
             setProfileUser(prev => ({
                 ...prev,
-                followers: !isFollowing 
-                    ? [...prev.followers, user._id] // Add me
-                    : prev.followers.filter(id => id !== user._id) // Remove me
+                followers: !isFollowing ? [...prev.followers, user._id] : prev.followers.filter(id => id !== user._id)
             }));
-
-            // IF FOLLOWING: Send Notification
             if (!isFollowing) {
-                // 1. Save to DB
-                await postService.createNotification({
-                    sender: user._id,
-                    receiver: userId,
-                    type: 'follow'
-                });
-                // 2. Send Socket Alert
-                socket.emit("send_notification", {
-                    senderName: user.username,
-                    receiverId: userId,
-                    type: 'follow'
-                });
+                await postService.createNotification({ sender: user._id, receiver: userId, type: 'follow' });
+                socket.emit("send_notification", { senderName: user.username, receiverId: userId, type: 'follow' });
             }
-
         } catch (error) { console.error(error); }
-    };
-
-    // --- HANDLE MESSAGE (Individual Chat) ---
-    const handleMessage = () => {
-        // Create Unique Room ID: [MyID, TheirID] sorted alphabetically
-        // This ensures the room ID is always the same for both users
-        const roomId = [user._id, userId].sort().join("_");
-        navigate(`/chat/${roomId}`);
     };
 
     const handleUpdateProfile = async (e) => {
@@ -105,6 +73,11 @@ const ProfilePage = () => {
         } catch (error) { alert("Failed to update"); }
     };
 
+    const handleMessage = () => {
+        const roomId = [user._id, userId].sort().join("_");
+        navigate(`/chat/${roomId}`);
+    };
+
     const removePost = (id) => {
         setPosts(posts.filter(post => post._id !== id));
         setSelectedPost(null);
@@ -116,7 +89,6 @@ const ProfilePage = () => {
 
     return (
         <div style={{ paddingBottom: '80px' }}>
-            {/* Header */}
             <div style={s.header}>
                 <Link to="/" style={{ textDecoration: 'none', color: theme.text }}><FaArrowLeft size={20} /></Link>
                 <h3 style={{margin: 0}}>{profileUser.username}</h3>
@@ -124,16 +96,11 @@ const ProfilePage = () => {
                     <button onClick={toggleTheme} style={s.iconBtn}>
                         {darkMode ? <FaSun size={20} color="orange" /> : <FaMoon size={20} />}
                     </button>
-                    {isMyProfile && (
-                        <>
-                            <Link to="/settings" style={s.iconBtn}><FaCog size={20} /></Link>
-                            <button onClick={logout} style={s.logoutBtn}><FaSignOutAlt size={20} /></button>
-                        </>
-                    )}
+                    {isMyProfile && <Link to="/settings" style={s.iconBtn}><FaCog size={20} /></Link>}
+                    {isMyProfile && <button onClick={logout} style={s.logoutBtn}><FaSignOutAlt size={20} /></button>}
                 </div>
             </div>
 
-            {/* Profile Info Card */}
             <div style={s.profileCard}>
                 <div style={s.avatarLarge}>
                     {profileUser.profilePic ? (
@@ -156,33 +123,23 @@ const ProfilePage = () => {
                     <>
                         <h2 style={{margin: '10px 0'}}>@{profileUser.username}</h2>
                         <p style={{color: theme.textSecondary, margin: '5px 0'}}>{profileUser.bio || "No bio yet."}</p>
-                        
                         <div style={s.stats}>
                             <span><strong>{posts.length}</strong> Posts</span>
                             <span><strong>{profileUser.followers.length}</strong> Followers</span>
                             <span><strong>{profileUser.following.length}</strong> Following</span>
                         </div>
-
-                        {/* BUTTONS: EDIT vs FOLLOW/MESSAGE */}
                         {isMyProfile ? (
-                            <button onClick={() => setEditMode(true)} style={s.editBtn}>
-                                <FaPen size={12} /> Edit Profile
-                            </button>
+                            <button onClick={() => setEditMode(true)} style={s.editBtn}><FaPen size={12} /> Edit Profile</button>
                         ) : (
                             <div style={{display: 'flex', gap: '10px', justifyContent: 'center'}}>
-                                <button onClick={handleFollow} style={isFollowing ? s.unfollowBtn : s.followBtn}>
-                                    {isFollowing ? "Unfollow" : "Follow"}
-                                </button>
-                                <button onClick={handleMessage} style={s.messageBtn}>
-                                    <FaEnvelope /> Message
-                                </button>
+                                <button onClick={handleFollow} style={isFollowing ? s.unfollowBtn : s.followBtn}>{isFollowing ? "Unfollow" : "Follow"}</button>
+                                <button onClick={handleMessage} style={s.messageBtn}><FaEnvelope /> Message</button>
                             </div>
                         )}
                     </>
                 )}
             </div>
 
-            {/* Post Grid */}
             <div style={s.gridContainer}>
                 {posts.map(post => (
                     <div key={post._id} style={s.gridItem} onClick={() => setSelectedPost(post)} onMouseEnter={() => setHoveredPostId(post._id)} onMouseLeave={() => setHoveredPostId(null)}>
@@ -204,7 +161,6 @@ const ProfilePage = () => {
                 ))}
             </div>
             
-            {/* Modal */}
             {selectedPost && (
                 <div style={s.modalOverlay} onClick={() => setSelectedPost(null)}>
                     <div style={s.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -238,7 +194,7 @@ const styles = (theme) => ({
     gridImage: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
     videoIcon: { position: 'absolute', top: '5px', right: '5px', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: '50%', padding: '5px' },
     textPostPreview: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5px', fontSize: '0.8rem', color: theme.textSecondary, textAlign: 'center' },
-    hoverOverlay: { position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', color: 'white', fontWeight: 'bold', fontSize: '1.2rem' },
+    hoverOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', color: 'white', fontWeight: 'bold', fontSize: '1.2rem' },
     hoverStat: { display: 'flex', alignItems: 'center', gap: '5px' },
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000 },
     modalContent: { backgroundColor: theme.cardBg, width: '90%', maxWidth: '500px', borderRadius: '10px', padding: '10px', maxHeight: '90vh', overflowY: 'auto' },
