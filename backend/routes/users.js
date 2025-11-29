@@ -11,11 +11,11 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// 1. Get User Data (UPDATED: Populates 'following' list for Chat Sidebar)
+// 1. Get User Data (CRITICAL FIX: Populates 'following' with names/pics)
 router.get('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.params.id)
-            .populate('following', 'username profilePic bio'); // <--- THIS IS THE KEY CHANGE
+            .populate('following', 'username profilePic bio'); // <--- Fixes "Loading..." in sidebar
         const { password, ...other } = user._doc;
         res.status(200).json(other);
     } catch (err) { res.status(500).json(err); }

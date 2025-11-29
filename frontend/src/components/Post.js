@@ -1,11 +1,11 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, memo } from 'react'; // Added memo
 import { Link } from 'react-router-dom';
 import postService from '../services/postService';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
 import { FaHeart, FaRegHeart, FaRegComment, FaTrashAlt, FaBookmark, FaRegBookmark, FaMapMarkerAlt, FaPen, FaCheck, FaTimes } from 'react-icons/fa';
 
-const timeAgo = (date) => {
+const timeAgo = (date) => { /* ... keep existing logic ... */ 
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
     let interval = seconds / 31536000;
     if (interval > 1) return Math.floor(interval) + "y";
@@ -20,7 +20,7 @@ const timeAgo = (date) => {
     return Math.floor(seconds) + "s";
 };
 
-const renderContentWithTags = (text) => {
+const renderContentWithTags = (text) => { /* ... keep existing logic ... */ 
     return text.split(' ').map((word, index) => {
         if (word.startsWith('#')) {
             const tag = word.substring(1);
@@ -40,8 +40,8 @@ const Post = ({ post, onDelete }) => {
     const [comments, setComments] = useState(post.comments || []);
     const [commentText, setCommentText] = useState('');
     const [saved, setSaved] = useState(false);
-
-    // Edit Mode
+    
+    // Edit States
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(post.content);
     const [displayContent, setDisplayContent] = useState(post.content);
@@ -54,15 +54,15 @@ const Post = ({ post, onDelete }) => {
 
     const handleLike = async () => { try { await postService.likePost(post._id); setLikeCount(liked ? likeCount - 1 : likeCount + 1); setLiked(!liked); } catch (error) { console.error(error); } };
     const handleSave = async () => { try { await postService.savePost(post._id); setSaved(!saved); } catch (error) { console.error(error); } };
-    const handleDelete = async () => { if (window.confirm("Delete this post?")) { try { await postService.deletePost(post._id); onDelete(post._id); } catch (error) { console.error(error); } } };
+    const handleDelete = async () => { if (window.confirm("Delete?")) { try { await postService.deletePost(post._id); onDelete(post._id); } catch (error) { console.error(error); } } };
     const handleComment = async (e) => { e.preventDefault(); if (!commentText.trim()) return; try { const response = await postService.addComment(post._id, commentText); setComments(response.data.comments); setCommentText(''); } catch (error) { console.error(error); } };
-
+    
     const handleUpdate = async () => {
         try {
             await postService.updatePost(post._id, editContent);
             setDisplayContent(editContent);
             setIsEditing(false);
-        } catch (error) { alert("Failed to update post"); }
+        } catch (error) { alert("Failed to update"); }
     };
 
     return (
@@ -70,7 +70,12 @@ const Post = ({ post, onDelete }) => {
             <div style={s.header}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {post.author.profilePic ? (
-                        <img src={`https://sphere-backend-2mx3.onrender.com${post.author.profilePic}`} alt="avatar" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img 
+                            src={`https://sphere-backend-2mx3.onrender.com${post.author.profilePic}`} 
+                            alt="avatar" 
+                            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                            loading="lazy" // <--- OPTIMIZATION: Lazy Load Avatar
+                        />
                     ) : (
                         <div style={s.avatarPlaceholder}>{post.author.username[0].toUpperCase()}</div>
                     )}
@@ -80,7 +85,6 @@ const Post = ({ post, onDelete }) => {
                         <span style={s.time}>{timeAgo(post.createdAt)}</span>
                     </div>
                 </div>
-                
                 {isOwner && (
                     <div style={{display: 'flex', gap: '10px'}}>
                         <button onClick={() => setIsEditing(!isEditing)} style={s.actionIconBtn}><FaPen size={14} color={theme.textSecondary} /></button>
@@ -101,7 +105,20 @@ const Post = ({ post, onDelete }) => {
                 <div style={s.content}>{renderContentWithTags(displayContent)}</div>
             )}
             
-            {imageUrl && (isVideo(imageUrl) ? <video controls style={s.image} loop muted playsInline><source src={imageUrl} /></video> : <img src={imageUrl} alt="Post" style={s.image} />)}
+            {imageUrl && (
+                isVideo(imageUrl) ? (
+                    <video controls style={s.image} loop muted playsInline preload="metadata"> {/* Preload metadata only */}
+                        <source src={imageUrl} type="video/mp4" />
+                    </video>
+                ) : (
+                    <img 
+                        src={imageUrl} 
+                        alt="Post" 
+                        style={s.image} 
+                        loading="lazy" // <--- OPTIMIZATION: Lazy Load Post Image
+                    />
+                )
+            )}
 
             <div style={s.actions}>
                 <div style={{display: 'flex', gap: '20px'}}>
@@ -122,6 +139,7 @@ const Post = ({ post, onDelete }) => {
 };
 
 const styles = (theme) => ({
+    // ... (Keep existing styles exactly as they were) ...
     card: { backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: '8px', marginBottom: '20px', padding: '15px' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
     avatarPlaceholder: { width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#007bff', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
@@ -129,9 +147,9 @@ const styles = (theme) => ({
     time: { color: theme.textSecondary, fontSize: '0.8rem' },
     actionIconBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: '5px' },
     content: { marginBottom: '15px', lineHeight: '1.5', color: theme.text },
-    editTextarea: { width: '100%', padding: '8px', borderRadius: '5px', border: `1px solid ${theme.border}`, backgroundColor: theme.inputBg, color: theme.text, fontFamily: 'inherit' },
-    saveBtn: { backgroundColor: '#28a745', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' },
-    cancelBtn: { backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' },
+    editTextarea: { width: '100%', padding: '8px', borderRadius: '5px', border: `1px solid ${theme.border}`, backgroundColor: theme.inputBg, color: theme.text, fontFamily: 'inherit', resize: 'vertical' },
+    saveBtn: { backgroundColor: '#28a745', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.9rem' },
+    cancelBtn: { backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.9rem' },
     image: { width: '100%', borderRadius: '4px', border: `1px solid ${theme.border}`, marginBottom: '12px' },
     actions: { display: 'flex', gap: '20px', borderTop: `1px solid ${theme.border}`, paddingTop: '12px' },
     actionBtn: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: theme.text, fontSize: '1rem' },
@@ -142,4 +160,5 @@ const styles = (theme) => ({
     postBtn: { background: 'none', border: 'none', color: '#0095f6', fontWeight: 'bold', cursor: 'pointer', paddingLeft: '10px' }
 });
 
-export default Post;
+// WRAP IN MEMO (Performance Boost)
+export default memo(Post);
