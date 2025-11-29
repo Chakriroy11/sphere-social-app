@@ -17,7 +17,8 @@ const HomePage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [viewStory, setViewStory] = useState(null);
     
-    // Infinite Scroll State
+    // UI States
+    const [loading, setLoading] = useState(true); // <--- New Loading State
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
 
@@ -26,18 +27,25 @@ const HomePage = () => {
     
     const fileInputRef = useRef(null);
 
-    // Initial Fetch (Page 1)
+    // Initial Fetch (Optimized with Promise.all)
     const fetchData = async () => {
+        setLoading(true); // Start Loading
         try {
-            const postsRes = await postService.getPosts(1);
-            const storiesRes = await postService.getStories();
-            const notifRes = await postService.getNotifications();
+            // Run all 3 requests at the same time
+            const [postsRes, storiesRes, notifRes] = await Promise.all([
+                postService.getPosts(1),
+                postService.getStories(),
+                postService.getNotifications()
+            ]);
             
             setPosts(postsRes.data);
             setStories(storiesRes.data);
-            setUnreadCount(notifRes.data.length); // In real app, filter by !read
+            setUnreadCount(notifRes.data.length);
         } catch (error) {
             console.error("Failed to fetch data", error);
+            toast.error("Could not load feed.");
+        } finally {
+            setLoading(false); // Stop Loading
         }
     };
 
@@ -78,7 +86,9 @@ const HomePage = () => {
 
         try {
             await postService.addStory(file);
-            fetchData();
+            // Refresh stories only
+            const storiesRes = await postService.getStories();
+            setStories(storiesRes.data);
             toast.success("Story added successfully! 📸");
         } catch (error) {
             toast.error("Failed to upload story");
@@ -117,62 +127,75 @@ const HomePage = () => {
                 </Link>
             </div>
 
-            {/* --- STORIES SECTION --- */}
-            <div style={s.storiesContainer}>
-                
-                {/* 1. MY STORY */}
-                <div style={s.storyItem}>
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        style={{display: 'none'}} 
-                        accept="image/*,video/*" 
-                        onChange={handleStoryUpload}
-                    />
-
-                    {myStories.length > 0 ? (
-                        <div style={{position: 'relative'}}>
-                            <div style={s.myStoryActive} onClick={() => setViewStory(myStories[0])}>
-                                <img src={getImgUrl(myStories[0].imageUrl)} alt="My Story" style={s.storyThumbnail} />
-                            </div>
-                            <div style={s.addBadge} onClick={(e) => { e.stopPropagation(); fileInputRef.current.click(); }}>+</div>
-                        </div>
-                    ) : (
-                        <div style={s.myStoryCircle} onClick={() => fileInputRef.current.click()}>
-                            <div style={s.myStoryInner}><span style={{fontSize: '1.5rem', marginTop: '-3px'}}>+</span></div>
-                        </div>
-                    )}
-                    
-                    <span style={s.storyUsername}>Your Story</span>
+            {loading ? (
+                // LOADING SPINNER
+                <div style={{textAlign: 'center', padding: '50px', color: '#007bff'}}>
+                    <h2>Loading Sphere...</h2>
                 </div>
+            ) : (
+                <>
+                    {/* --- STORIES SECTION --- */}
+                    <div style={s.storiesContainer}>
+                        {/* 1. MY STORY */}
+                        <div style={s.storyItem}>
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                style={{display: 'none'}} 
+                                accept="image/*,video/*" 
+                                onChange={handleStoryUpload}
+                            />
 
-                {/* 2. OTHER USERS' STORIES */}
-                {otherStories.map((story) => (
-                    <div key={story._id} style={s.storyItem} onClick={() => setViewStory(story)}>
-                        <div style={s.storyCircle}>
-                            <div style={s.storyInner}>
-                                {story.user.username[0].toUpperCase()}
-                            </div>
+                            {myStories.length > 0 ? (
+                                <div style={{position: 'relative'}}>
+                                    <div style={s.myStoryActive} onClick={() => setViewStory(myStories[0])}>
+                                        <img src={getImgUrl(myStories[0].imageUrl)} alt="My Story" style={s.storyThumbnail} />
+                                    </div>
+                                    <div style={s.addBadge} onClick={(e) => { e.stopPropagation(); fileInputRef.current.click(); }}>+</div>
+                                </div>
+                            ) : (
+                                <div style={s.myStoryCircle} onClick={() => fileInputRef.current.click()}>
+                                    <div style={s.myStoryInner}><span style={{fontSize: '1.5rem', marginTop: '-3px'}}>+</span></div>
+                                </div>
+                            )}
+                            <span style={s.storyUsername}>Your Story</span>
                         </div>
-                        <span style={s.storyUsername}>
-                            {story.user.username.length > 8 ? story.user.username.slice(0, 8) + '...' : story.user.username}
-                        </span>
-                    </div>
-                ))}
-            </div>
 
-            {/* --- FEED SECTION --- */}
-            <div style={s.feedContainer}>
-                {posts.map(post => (
-                    <Post key={post._id} post={post} onDelete={removePost} />
-                ))}
-                
-                {!hasMore && posts.length > 0 && (
-                    <p style={{ textAlign: 'center', color: theme.textSecondary, marginTop: '20px', marginBottom: '20px' }}>
-                        You're all caught up! ✅
-                    </p>
-                )}
-            </div>
+                        {/* 2. OTHER USERS' STORIES */}
+                        {otherStories.map((story) => (
+                            <div key={story._id} style={s.storyItem} onClick={() => setViewStory(story)}>
+                                <div style={s.storyCircle}>
+                                    <div style={s.storyInner}>
+                                        {story.user.username[0].toUpperCase()}
+                                    </div>
+                                </div>
+                                <span style={s.storyUsername}>
+                                    {story.user.username.length > 8 ? story.user.username.slice(0, 8) + '...' : story.user.username}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* --- FEED SECTION --- */}
+                    <div style={s.feedContainer}>
+                        {posts.map(post => (
+                            <Post key={post._id} post={post} onDelete={removePost} />
+                        ))}
+                        
+                        {posts.length === 0 && (
+                            <p style={{ textAlign: 'center', color: theme.textSecondary, marginTop: '50px' }}>
+                                No posts yet. Be the first to post!
+                            </p>
+                        )}
+                        
+                        {!hasMore && posts.length > 0 && (
+                            <p style={{ textAlign: 'center', color: theme.textSecondary, marginTop: '20px', marginBottom: '20px' }}>
+                                You're all caught up! ✅
+                            </p>
+                        )}
+                    </div>
+                </>
+            )}
 
             {/* --- BOTTOM NAVBAR --- */}
             <div style={s.bottomNav}>
@@ -200,7 +223,7 @@ const HomePage = () => {
                 </Link>
             </div>
 
-            {/* --- CREATE POST MODAL --- */}
+            {/* --- MODALS --- */}
             {isModalOpen && (
                 <div style={s.modalOverlay} onClick={() => setIsModalOpen(false)}>
                     <div style={s.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -213,7 +236,6 @@ const HomePage = () => {
                 </div>
             )}
 
-            {/* --- VIEW STORY MODAL --- */}
             {viewStory && (
                 <div style={s.storyOverlay} onClick={() => setViewStory(null)}>
                     <div style={s.storyContent} onClick={(e) => e.stopPropagation()}>
@@ -236,9 +258,9 @@ const HomePage = () => {
 const styles = (theme) => ({
     mainContainer: { paddingBottom: '80px', backgroundColor: theme.bg, minHeight: '100vh' },
     
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', backgroundColor: theme.navBg, position: 'sticky', top: 0, zIndex: 100, height: '60px' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', backgroundColor: theme.navBg, borderBottom: 'none', position: 'sticky', top: 0, zIndex: 100, height: '60px' },
     
-    storiesContainer: { display: 'flex', gap: '15px', padding: '15px', overflowX: 'auto', backgroundColor: theme.navBg, scrollbarWidth: 'none' },
+    storiesContainer: { display: 'flex', gap: '15px', padding: '15px', overflowX: 'auto', backgroundColor: theme.navBg, borderBottom: 'none', scrollbarWidth: 'none' },
     storyItem: { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '70px', cursor: 'pointer' },
     myStoryActive: { width: '62px', height: '62px', borderRadius: '50%', border: '2px solid #007bff', padding: '2px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '5px' },
     storyThumbnail: { width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' },
@@ -251,7 +273,7 @@ const styles = (theme) => ({
 
     feedContainer: { maxWidth: '600px', margin: '0 auto', padding: '10px' },
     
-    bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, height: '60px', backgroundColor: theme.navBg, display: 'flex', justifyContent: 'space-around', alignItems: 'center', zIndex: 1000 },
+    bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, height: '60px', backgroundColor: theme.navBg, borderTop: 'none', display: 'flex', justifyContent: 'space-around', alignItems: 'center', zIndex: 1000 },
     navItem: { background: 'none', border: 'none', cursor: 'pointer', color: theme.text, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px' },
     notificationBadge: { position: 'absolute', top: '-2px', right: '-2px', backgroundColor: '#ff4444', color: 'white', borderRadius: '50%', width: '18px', height: '18px', fontSize: '0.7rem', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', border: `2px solid ${theme.navBg}` },
 
