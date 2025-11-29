@@ -9,11 +9,10 @@ const UserSchema = new mongoose.Schema({
     profilePic: { type: String, default: "" },
     bio: { type: String, default: "" },
     
-    // CRITICAL FIX: Define these as ObjectIds referencing 'User'
+    // THE FIX: These must utilize 'ObjectId' and 'ref' to work with .populate()
     followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     
-    // Saved posts
     saved: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }], 
 }, { timestamps: true });
 

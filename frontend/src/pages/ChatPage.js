@@ -22,14 +22,12 @@ const ChatPage = () => {
     
     const messagesEndRef = useRef(null);
 
-    // 1. Fetch Friends (With Safety Check)
+    // 1. Fetch Friends
     useEffect(() => {
         const getFriends = async () => {
             try {
                 if (user?._id) {
                     const res = await userService.getUser(user._id);
-                    console.log("DEBUG FRIENDS LIST:", res.data.following);
-                    // Filter out bad data to prevent crashes
                     const validFriends = (res.data.following || []).filter(f => f && f.username);
                     setFriends(validFriends);
                 }
@@ -58,24 +56,27 @@ const ChatPage = () => {
     };
 
     const sendMessage = async () => {
-        // Ensure user is loaded before sending to avoid "Unknown User"
         if (currentMessage !== "" && user?.username) {
             const messageData = {
                 conversationId: roomId,
                 room: roomId,
-                sender: user.username, 
+                sender: user.username,
                 text: currentMessage,
                 time: new Date(Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
 
-            await socket.emit("send_message", messageData);
+            // 1. INSTANTLY Update UI (This makes it show in the chatpage)
             setMessageList((list) => [...list, messageData]);
-            setCurrentMessage("");
+            setCurrentMessage(""); // Clear input immediately
+
+            // 2. Send via Socket (To other user)
+            await socket.emit("send_message", messageData);
             socket.emit("stop_typing", { room: roomId }); 
+            
+            // 3. Save to Database (Background)
             await axios.post(`${API_BASE}/messages`, messageData);
-        } else if (!user?.username) {
-            // Retry safety
-            console.log("Waiting for user data...");
+            
+            scrollToBottom();
         }
     };
 
@@ -127,7 +128,7 @@ const ChatPage = () => {
                         {friends.map((friend) => {
                             if (!friend) return null;
                             const isOnline = onlineUsers.some(u => u.userId === friend._id);
-                            const initial = friend.username.charAt(0).toUpperCase();
+                            const initial = friend.username ? friend.username.charAt(0).toUpperCase() : "?";
 
                             return (
                                 <div key={friend._id} onClick={() => openChat(friend._id)} style={styles.friendItem}>
@@ -167,9 +168,6 @@ const ChatPage = () => {
                                     return (
                                         <div key={index} style={isMe ? styles.messageRowMe : styles.messageRowOther}>
                                             <div style={isMe ? styles.bubbleMe : styles.bubbleOther}>
-                                                
-                                                {/* CLEANER UI: Removed Sender Name Display */}
-                                                
                                                 <p style={{margin: 0}}>{msg.text}</p>
                                                 <div style={styles.metaRow}>
                                                     <span style={isMe ? styles.timeMe : styles.timeOther}>{msg.time}</span>
