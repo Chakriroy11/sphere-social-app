@@ -11,10 +11,13 @@ const CreatePost = ({ onPostCreated }) => {
     
     // Location States
     const [location, setLocation] = useState(""); 
-    const [showLocSearch, setShowLocSearch] = useState(false); // Toggle search box
+    const [showLocSearch, setShowLocSearch] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState([]);
     const [loadingLoc, setLoadingLoc] = useState(false);
+    
+    // NEW: Posting State (To fix the "Button not working" feeling)
+    const [isPosting, setIsPosting] = useState(false);
     
     const { theme } = useContext(ThemeContext);
 
@@ -30,7 +33,7 @@ const CreatePost = ({ onPostCreated }) => {
         }
     };
 
-    // 1. AUTO-DETECT LOCATION (GPS)
+    // --- LOCATION LOGIC ---
     const handleGetLocation = () => {
         setLoadingLoc(true);
         if ("geolocation" in navigator) {
@@ -42,27 +45,26 @@ const CreatePost = ({ onPostCreated }) => {
                     const city = address.city || address.town || address.village || address.county;
                     const country = address.country;
                     setLocation(city && country ? `📍 ${city}, ${country}` : "📍 Unknown Location");
-                    setShowLocSearch(false); // Hide search if GPS found
+                    setShowLocSearch(false);
                 } catch (error) { setLocation("📍 GPS Location"); } 
                 finally { setLoadingLoc(false); }
             }, () => { alert("Permission denied"); setLoadingLoc(false); });
         }
     };
 
-    // 2. MANUAL SEARCH LOCATION
     const searchLocation = async (e) => {
-        e.preventDefault(); // Prevent form submit
+        e.preventDefault();
         if (!searchQuery) return;
         setLoadingLoc(true);
         try {
             const res = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}`);
-            setSearchResults(res.data); // Save results
+            setSearchResults(res.data);
         } catch (error) { console.error(error); } 
         finally { setLoadingLoc(false); }
     };
 
     const selectLocation = (place) => {
-        setLocation(`📍 ${place.display_name.split(',')[0]}, ${place.display_name.split(',').pop().trim()}`); // Shorten name
+        setLocation(`📍 ${place.display_name.split(',')[0]}, ${place.display_name.split(',').pop().trim()}`);
         setShowLocSearch(false);
         setSearchQuery("");
         setSearchResults([]);
@@ -70,8 +72,18 @@ const CreatePost = ({ onPostCreated }) => {
 
     const clearImage = () => { setFile(null); setPreviewUrl(null); };
 
+    // --- SUBMIT LOGIC (UPDATED) ---
     const handleSubmit = async (e) => {
-        e.preventDefault();
+        e.preventDefault(); // Stop page reload
+        
+        // Validation: Must have text OR image
+        if (!content.trim() && !file) {
+            alert("Please write something or add an image.");
+            return;
+        }
+
+        setIsPosting(true); // Disable button immediately
+
         const formData = new FormData();
         formData.append('content', content);
         if (location) formData.append('location', location);
@@ -79,11 +91,21 @@ const CreatePost = ({ onPostCreated }) => {
 
         try {
             await postService.createPost(formData);
+            
+            // Reset Form
             setContent('');
             setLocation('');
             clearImage();
+            
+            // Notify Parent (HomePage) to refresh feed
             if (onPostCreated) onPostCreated();
-        } catch (error) { alert('Failed to create post'); }
+            
+        } catch (error) {
+            console.error("Post Error:", error);
+            alert('Failed to create post. Please try again.');
+        } finally {
+            setIsPosting(false); // Re-enable button
+        }
     };
 
     const s = styles(theme);
@@ -98,7 +120,6 @@ const CreatePost = ({ onPostCreated }) => {
                     style={s.textarea}
                 />
                 
-                {/* Selected Location Display */}
                 {location && (
                     <div style={s.locationBadge}>
                         {location} 
@@ -106,7 +127,7 @@ const CreatePost = ({ onPostCreated }) => {
                     </div>
                 )}
 
-                {/* SEARCH BOX (Visible when toggled) */}
+                {/* SEARCH BOX */}
                 {showLocSearch && (
                     <div style={s.searchBox}>
                         <div style={{display: 'flex', gap: '5px'}}>
@@ -119,7 +140,6 @@ const CreatePost = ({ onPostCreated }) => {
                             />
                             <button type="button" onClick={searchLocation} style={s.searchBtn}><FaSearch /></button>
                         </div>
-                        {/* Search Results List */}
                         {searchResults.length > 0 && (
                             <ul style={s.resultsList}>
                                 {searchResults.slice(0, 3).map((place) => (
@@ -145,20 +165,20 @@ const CreatePost = ({ onPostCreated }) => {
                             <FaImage size={24} color="#28a745" />
                             <input type="file" onChange={handleFileChange} accept="image/*,video/*" style={{display: 'none'}} />
                         </label>
-                        
-                        {/* Toggle Location Search */}
                         <button type="button" onClick={() => setShowLocSearch(!showLocSearch)} style={s.iconButton}>
                             <FaMapMarkerAlt size={24} color="#dc3545" />
                         </button>
-                        
-                        {/* GPS Auto Detect Button (Small) */}
                         {showLocSearch && (
                             <button type="button" onClick={handleGetLocation} style={s.gpsBtn}>
                                 {loadingLoc ? "..." : "Use GPS"}
                             </button>
                         )}
                     </div>
-                    <button type="submit" style={s.button}>Post</button>
+                    
+                    {/* SUBMIT BUTTON (Disabled while posting) */}
+                    <button type="submit" style={{...s.button, opacity: isPosting ? 0.7 : 1}} disabled={isPosting}>
+                        {isPosting ? "Posting..." : "Post"}
+                    </button>
                 </div>
             </form>
         </div>
@@ -172,7 +192,6 @@ const styles = (theme) => ({
     locationBadge: { color: '#007bff', fontSize: '0.9rem', marginBottom: '10px', fontWeight: 'bold', display: 'flex', alignItems: 'center' },
     removeLocBtn: { background: 'none', border: 'none', color: '#ff4444', fontSize: '1.2rem', cursor: 'pointer', marginLeft: '5px' },
 
-    // Search Styles
     searchBox: { marginBottom: '10px', padding: '10px', backgroundColor: theme.inputBg, borderRadius: '8px' },
     searchInput: { flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '70%' },
     searchBtn: { padding: '8px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginLeft: '5px' },

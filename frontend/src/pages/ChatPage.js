@@ -2,143 +2,199 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import io from 'socket.io-client';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { Link, useParams } from 'react-router-dom';
-import { FaCheckDouble } from 'react-icons/fa';
+import userService from '../services/userService';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { FaCheckDouble, FaArrowLeft, FaPaperPlane } from 'react-icons/fa';
 
-// UPDATED TO RENDER URL
+// Connect to LIVE Backend
 const socket = io.connect("https://sphere-backend-2mx3.onrender.com");
 const API_BASE = "https://sphere-backend-2mx3.onrender.com/api";
 
 const ChatPage = () => {
     const { user, onlineUsers } = useContext(AuthContext);
     const { roomId } = useParams();
+    const navigate = useNavigate();
     
-    const [showChat, setShowChat] = useState(!!roomId); 
-    const [room, setRoom] = useState(roomId || ""); 
+    const [friends, setFriends] = useState([]); 
     const [currentMessage, setCurrentMessage] = useState("");
     const [messageList, setMessageList] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
+    
     const messagesEndRef = useRef(null);
 
-    const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); };
+    // 1. Fetch Friends
+    useEffect(() => {
+        const getFriends = async () => {
+            try {
+                if (user?._id) {
+                    const res = await userService.getUser(user._id);
+                    setFriends(res.data.following || []);
+                }
+            } catch (err) { console.error(err); }
+        };
+        getFriends();
+    }, [user]);
 
-    const fetchHistory = async (id) => {
-        try {
-            const res = await axios.get(`${API_BASE}/messages/${id}`);
-            setMessageList(res.data);
-            await axios.put(`${API_BASE}/messages/read/${id}`, { username: user.username });
-            scrollToBottom();
-        } catch (err) { console.error(err); }
-    };
-
+    // 2. Auto-Join Room
     useEffect(() => {
         if (roomId) {
-            setRoom(roomId);
-            setShowChat(true);
             socket.emit("join_room", roomId);
             fetchHistory(roomId);
         }
     }, [roomId]);
 
-    const joinRoom = () => {
-        if (room !== "") {
-            socket.emit("join_room", room);
-            setShowChat(true);
-            fetchHistory(room);
-        }
+    const fetchHistory = async (id) => {
+        try {
+            const res = await axios.get(`${API_BASE}/messages/${id}`);
+            setMessageList(res.data);
+            if (user?.username) {
+                await axios.put(`${API_BASE}/messages/read/${id}`, { username: user.username });
+            }
+            scrollToBottom();
+        } catch (err) { console.error(err); }
     };
 
     const sendMessage = async () => {
-        if (currentMessage !== "") {
+        // Validation: Message not empty AND User is loaded
+        if (currentMessage !== "" && user?.username) {
             const messageData = {
-                conversationId: room,
-                room: room,
-                sender: user.username,
+                conversationId: roomId,
+                room: roomId,
+                sender: user.username, // Uses the loaded username
                 text: currentMessage,
                 time: new Date(Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
+
             await socket.emit("send_message", messageData);
             setMessageList((list) => [...list, messageData]);
             setCurrentMessage("");
-            socket.emit("stop_typing", { room: room }); 
+            socket.emit("stop_typing", { room: roomId }); 
             await axios.post(`${API_BASE}/messages`, messageData);
+        } else if (!user?.username) {
+            alert("Please wait, user data loading...");
         }
     };
 
     const handleInput = (e) => {
         setCurrentMessage(e.target.value);
-        if (e.target.value.length > 0) {
-            socket.emit("typing", { room: room, user: user.username });
+        if (e.target.value.length > 0 && user?.username) {
+            socket.emit("typing", { room: roomId, user: user.username });
         } else {
-            socket.emit("stop_typing", { room: room });
+            socket.emit("stop_typing", { room: roomId });
         }
     };
 
+    const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); };
     useEffect(() => { scrollToBottom(); }, [messageList, isTyping]);
 
     useEffect(() => {
-        const receiveMessage = (data) => { setMessageList((list) => [...list, data]); };
+        const receiveMessage = (data) => setMessageList((list) => [...list, data]);
         socket.on("receive_message", receiveMessage);
-        socket.on("display_typing", (data) => { if (data.user !== user.username) setIsTyping(true); });
+        socket.on("display_typing", (data) => { if (data.user !== user?.username) setIsTyping(true); });
         socket.on("hide_typing", () => setIsTyping(false));
         return () => { 
             socket.off("receive_message", receiveMessage); 
             socket.off("display_typing");
             socket.off("hide_typing");
         };
-    }, [user.username]);
+    }, [user]);
 
-    const getOtherUserId = () => {
-        if (!roomId) return null;
-        const ids = roomId.split('_');
-        return ids.find(id => id !== user._id);
+    const openChat = (friendId) => {
+        const newRoomId = [user._id, friendId].sort().join("_");
+        navigate(`/chat/${newRoomId}`);
     };
-    const otherUserId = getOtherUserId();
-    const isOnline = otherUserId && onlineUsers.some(u => u.userId === otherUserId);
+
+    const isMobile = window.innerWidth <= 768;
+    const showSidebar = !roomId || !isMobile;
+    const showChatArea = roomId || !isMobile;
 
     return (
-        <div style={styles.pageContainer}>
-            <div style={styles.topBar}>
-                <Link to="/" style={styles.backLink}>← Back to Feed</Link>
-            </div>
-            {!showChat ? (
-                <div style={styles.joinCard}>
-                    <h2 style={{marginBottom: '20px', color: '#333'}}>💬 Join Conversation</h2>
-                    <input type="text" placeholder="Enter Room Name" onChange={(event) => setRoom(event.target.value)} style={styles.joinInput} />
-                    <button onClick={joinRoom} style={styles.joinBtn}>Start Chatting</button>
-                </div>
-            ) : (
-                <div style={styles.chatWindow}>
-                    <div style={styles.chatHeader}>
-                        <div style={{...styles.onlineDot, backgroundColor: isOnline ? '#31a24c' : '#ccc'}}></div>
-                        <div style={{display: 'flex', flexDirection: 'column'}}>
-                            <span style={{fontWeight: 'bold', fontSize: '1.1rem'}}>{roomId ? "Private Conversation" : `#${room}`}</span>
-                            <span style={{fontSize: '0.8rem', color: isOnline ? '#31a24c' : '#999'}}>{isOnline ? 'Online' : 'Offline'}</span>
-                        </div>
+        <div style={styles.container}>
+            {/* --- SIDEBAR --- */}
+            {showSidebar && (
+                <div style={{...styles.sidebar, width: isMobile ? '100%' : '350px'}}>
+                    <div style={styles.sidebarHeader}>
+                        <Link to="/" style={{color: '#333', marginRight: '10px'}}><FaArrowLeft /></Link>
+                        <h3 style={{margin: 0}}>Chats</h3>
                     </div>
-                    <div style={styles.chatBody}>
-                        {messageList.map((msg, index) => {
-                            const isMe = msg.sender === user.username;
+                    <div style={styles.friendList}>
+                        {friends.length === 0 && <p style={{padding: '20px', color: '#999'}}>Follow people to chat!</p>}
+                        
+                        {friends.map((friend) => {
+                            if (!friend) return null;
+                            const isOnline = onlineUsers.some(u => u.userId === friend._id);
+                            const initial = friend.username ? friend.username.charAt(0).toUpperCase() : "?";
+
                             return (
-                                <div key={index} style={isMe ? styles.messageRowMe : styles.messageRowOther}>
-                                    <div style={isMe ? styles.bubbleMe : styles.bubbleOther}>
-                                        {!isMe && <div style={styles.senderName}>{msg.sender}</div>}
-                                        <p style={{margin: 0}}>{msg.text}</p>
-                                        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px'}}>
-                                            <span style={isMe ? styles.timeMe : styles.timeOther}>{msg.time}</span>
-                                            {isMe && <FaCheckDouble size={12} color={msg.read ? '#00e676' : 'rgba(255,255,255,0.7)'} />}
-                                        </div>
+                                <div key={friend._id} onClick={() => openChat(friend._id)} style={styles.friendItem}>
+                                    <div style={{position: 'relative'}}>
+                                        {friend.profilePic ? (
+                                            <img src={`https://sphere-backend-2mx3.onrender.com${friend.profilePic}`} alt="pic" style={styles.avatar} />
+                                        ) : (
+                                            <div style={styles.avatarPlaceholder}>{initial}</div>
+                                        )}
+                                        {isOnline && <div style={styles.onlineBadge}></div>}
+                                    </div>
+                                    <div style={styles.friendInfo}>
+                                        <span style={{fontWeight: 'bold'}}>{friend.username || "Loading..."}</span>
+                                        <span style={{fontSize: '0.8rem', color: isOnline ? '#31a24c' : '#999'}}>
+                                            {isOnline ? 'Online' : 'Offline'}
+                                        </span>
                                     </div>
                                 </div>
                             );
                         })}
-                        {isTyping && <div style={styles.messageRowOther}><div style={{...styles.bubbleOther, fontStyle: 'italic', color: '#888'}}>Typing...</div></div>}
-                        <div ref={messagesEndRef} />
                     </div>
-                    <div style={styles.chatFooter}>
-                        <input type="text" value={currentMessage} placeholder="Type a message..." onChange={handleInput} onKeyPress={(event) => { event.key === "Enter" && sendMessage(); }} style={styles.chatInput} />
-                        <button onClick={sendMessage} style={styles.sendBtn}>➤</button>
-                    </div>
+                </div>
+            )}
+
+            {/* --- CHAT AREA --- */}
+            {showChatArea && (
+                <div style={styles.chatArea}>
+                    {roomId ? (
+                        <>
+                            <div style={styles.chatHeader}>
+                                {isMobile && <button onClick={() => navigate('/chat')} style={styles.backBtn}>←</button>}
+                                <h3>Private Chat</h3>
+                            </div>
+                            <div style={styles.chatBody}>
+                                {messageList.map((msg, index) => {
+                                    const isMe = msg.sender === user?.username;
+                                    return (
+                                        <div key={index} style={isMe ? styles.messageRowMe : styles.messageRowOther}>
+                                            <div style={isMe ? styles.bubbleMe : styles.bubbleOther}>
+                                                
+                                                {/* REMOVED THE SENDER NAME HERE FOR CLEANER UI */}
+                                                
+                                                <p style={{margin: 0}}>{msg.text}</p>
+                                                <div style={styles.metaRow}>
+                                                    <span style={isMe ? styles.timeMe : styles.timeOther}>{msg.time}</span>
+                                                    {isMe && <FaCheckDouble size={10} color={msg.read ? '#00e676' : 'rgba(255,255,255,0.7)'} />}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {isTyping && <div style={styles.typingIndicator}>Typing...</div>}
+                                <div ref={messagesEndRef} />
+                            </div>
+                            <div style={styles.chatFooter}>
+                                <input
+                                    type="text"
+                                    value={currentMessage}
+                                    placeholder="Type a message..."
+                                    onChange={handleInput}
+                                    onKeyPress={(event) => event.key === "Enter" && sendMessage()}
+                                    style={styles.chatInput}
+                                />
+                                <button onClick={sendMessage} style={styles.sendBtn}><FaPaperPlane /></button>
+                            </div>
+                        </>
+                    ) : (
+                        <div style={styles.emptyState}>
+                            <h2>Select a friend to start chatting 💬</h2>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -146,26 +202,31 @@ const ChatPage = () => {
 };
 
 const styles = {
-    pageContainer: { height: '100vh', backgroundColor: '#f0f2f5', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '20px', boxSizing: 'border-box' },
-    topBar: { width: '100%', maxWidth: '600px', marginBottom: '10px', paddingLeft: '10px' },
-    backLink: { textDecoration: 'none', color: '#007bff', fontWeight: 'bold', fontSize: '1rem' },
-    joinCard: { backgroundColor: 'white', padding: '40px', borderRadius: '15px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center', width: '90%', maxWidth: '400px', marginTop: '50px' },
-    joinInput: { width: '100%', padding: '12px', fontSize: '1rem', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '20px', boxSizing: 'border-box', outline: 'none' },
-    joinBtn: { width: '100%', padding: '12px', backgroundColor: '#0084ff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' },
-    chatWindow: { width: '100%', maxWidth: '600px', height: '80vh', backgroundColor: 'white', borderRadius: '15px', boxShadow: '0 5px 15px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-    chatHeader: { height: '60px', backgroundColor: '#fff', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', padding: '0 20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', zIndex: 10 },
-    onlineDot: { width: '12px', height: '12px', borderRadius: '50%', marginRight: '10px' },
-    chatBody: { flex: 1, padding: '20px', overflowY: 'auto', backgroundColor: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: '10px' },
+    container: { display: 'flex', height: '100vh', backgroundColor: '#f0f2f5' },
+    sidebar: { backgroundColor: 'white', borderRight: '1px solid #ddd', display: 'flex', flexDirection: 'column' },
+    sidebarHeader: { padding: '20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', height: '60px', boxSizing: 'border-box' },
+    friendList: { flex: 1, overflowY: 'auto' },
+    friendItem: { display: 'flex', alignItems: 'center', padding: '15px 20px', cursor: 'pointer', borderBottom: '1px solid #f9f9f9' },
+    friendInfo: { marginLeft: '15px', display: 'flex', flexDirection: 'column' },
+    avatar: { width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover' },
+    avatarPlaceholder: { width: '45px', height: '45px', borderRadius: '50%', backgroundColor: '#007bff', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
+    onlineBadge: { width: '12px', height: '12px', backgroundColor: '#31a24c', borderRadius: '50%', position: 'absolute', bottom: '0', right: '0', border: '2px solid white' },
+    chatArea: { flex: 1, display: 'flex', flexDirection: 'column' },
+    chatHeader: { height: '60px', backgroundColor: 'white', borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', padding: '0 20px' },
+    backBtn: { marginRight: '10px', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' },
+    chatBody: { flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' },
+    emptyState: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' },
     messageRowMe: { display: 'flex', justifyContent: 'flex-end' },
     messageRowOther: { display: 'flex', justifyContent: 'flex-start' },
-    bubbleMe: { backgroundColor: '#0084ff', color: 'white', padding: '10px 15px', borderRadius: '18px 18px 0 18px', maxWidth: '70%', position: 'relative', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordWrap: 'break-word' },
-    bubbleOther: { backgroundColor: '#e4e6eb', color: 'black', padding: '10px 15px', borderRadius: '18px 18px 18px 0', maxWidth: '70%', position: 'relative', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordWrap: 'break-word' },
-    senderName: { fontSize: '0.75rem', color: '#666', fontWeight: 'bold', marginBottom: '2px' },
-    timeMe: { fontSize: '0.65rem', color: 'rgba(255,255,255,0.7)', display: 'block', textAlign: 'right', marginTop: '5px' },
-    timeOther: { fontSize: '0.65rem', color: '#65676b', display: 'block', textAlign: 'right', marginTop: '5px' },
-    chatFooter: { padding: '10px', backgroundColor: 'white', borderTop: '1px solid #eee', display: 'flex', alignItems: 'center', gap: '10px' },
-    chatInput: { flex: 1, padding: '12px 20px', borderRadius: '20px', border: '1px solid #ddd', backgroundColor: '#f0f2f5', outline: 'none', fontSize: '0.95rem' },
-    sendBtn: { width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#0084ff', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }
+    bubbleMe: { backgroundColor: '#0084ff', color: 'white', padding: '10px 15px', borderRadius: '18px 18px 0 18px', maxWidth: '70%' },
+    bubbleOther: { backgroundColor: '#e4e6eb', color: 'black', padding: '10px 15px', borderRadius: '18px 18px 18px 0', maxWidth: '70%' },
+    metaRow: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px', marginTop: '5px' },
+    timeMe: { fontSize: '0.65rem', color: 'rgba(255,255,255,0.7)' },
+    timeOther: { fontSize: '0.65rem', color: '#65676b' },
+    typingIndicator: { fontStyle: 'italic', color: '#888', marginLeft: '20px', marginBottom: '10px' },
+    chatFooter: { padding: '15px', backgroundColor: 'white', borderTop: '1px solid #ddd', display: 'flex', gap: '10px' },
+    chatInput: { flex: 1, padding: '12px 20px', borderRadius: '25px', border: '1px solid #ddd', outline: 'none', backgroundColor: '#f0f2f5' },
+    sendBtn: { width: '45px', height: '45px', borderRadius: '50%', backgroundColor: '#0084ff', color: 'white', border: 'none', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }
 };
 
 export default ChatPage;
