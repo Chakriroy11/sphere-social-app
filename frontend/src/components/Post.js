@@ -1,11 +1,11 @@
-import React, { useContext, useState, memo } from 'react'; // Added memo
+import React, { useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
 import postService from '../services/postService';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
 import { FaHeart, FaRegHeart, FaRegComment, FaTrashAlt, FaBookmark, FaRegBookmark, FaMapMarkerAlt, FaPen, FaCheck, FaTimes } from 'react-icons/fa';
 
-const timeAgo = (date) => { /* ... keep existing logic ... */ 
+const timeAgo = (date) => {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
     let interval = seconds / 31536000;
     if (interval > 1) return Math.floor(interval) + "y";
@@ -20,7 +20,7 @@ const timeAgo = (date) => { /* ... keep existing logic ... */
     return Math.floor(seconds) + "s";
 };
 
-const renderContentWithTags = (text) => { /* ... keep existing logic ... */ 
+const renderContentWithTags = (text) => {
     return text.split(' ').map((word, index) => {
         if (word.startsWith('#')) {
             const tag = word.substring(1);
@@ -41,15 +41,22 @@ const Post = ({ post, onDelete }) => {
     const [commentText, setCommentText] = useState('');
     const [saved, setSaved] = useState(false);
     
-    // Edit States
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(post.content);
     const [displayContent, setDisplayContent] = useState(post.content);
 
-    const imageUrl = post.imageUrl ? `https://sphere-backend-2mx3.onrender.com${post.imageUrl}` : null;
     const isOwner = user && post.author._id === user._id;
     const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm'));
 
+    // URL Helper: Handles both Cloudinary (http) and Old Local (relative) paths
+    const getImgUrl = (path) => {
+        if (!path) return null;
+        if (path.startsWith('http')) return path;
+        return `https://sphere-backend-2mx3.onrender.com${path}`;
+    };
+
+    const imageUrl = getImgUrl(post.imageUrl);
+    const profilePic = getImgUrl(post.author.profilePic);
     const s = styles(theme);
 
     const handleLike = async () => { try { await postService.likePost(post._id); setLikeCount(liked ? likeCount - 1 : likeCount + 1); setLiked(!liked); } catch (error) { console.error(error); } };
@@ -69,13 +76,8 @@ const Post = ({ post, onDelete }) => {
         <div style={s.card}>
             <div style={s.header}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {post.author.profilePic ? (
-                        <img 
-                            src={`https://sphere-backend-2mx3.onrender.com${post.author.profilePic}`} 
-                            alt="avatar" 
-                            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
-                            loading="lazy" // <--- OPTIMIZATION: Lazy Load Avatar
-                        />
+                    {profilePic ? (
+                        <img src={profilePic} alt="avatar" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
                     ) : (
                         <div style={s.avatarPlaceholder}>{post.author.username[0].toUpperCase()}</div>
                     )}
@@ -107,15 +109,18 @@ const Post = ({ post, onDelete }) => {
             
             {imageUrl && (
                 isVideo(imageUrl) ? (
-                    <video controls style={s.image} loop muted playsInline preload="metadata"> {/* Preload metadata only */}
-                        <source src={imageUrl} type="video/mp4" />
-                    </video>
+                    <video controls style={s.image} loop muted playsInline><source src={imageUrl} /></video> 
                 ) : (
                     <img 
                         src={imageUrl} 
                         alt="Post" 
                         style={s.image} 
-                        loading="lazy" // <--- OPTIMIZATION: Lazy Load Post Image
+                        loading="lazy"
+                        // FIX FOR BROKEN IMAGES:
+                        onError={(e) => { 
+                            e.target.onerror = null; 
+                            e.target.src = "https://via.placeholder.com/500x300?text=Image+Expired"; 
+                        }}
                     />
                 )
             )}
@@ -138,8 +143,8 @@ const Post = ({ post, onDelete }) => {
     );
 };
 
+// ... (Keep styles consistent)
 const styles = (theme) => ({
-    // ... (Keep existing styles exactly as they were) ...
     card: { backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: '8px', marginBottom: '20px', padding: '15px' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
     avatarPlaceholder: { width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#007bff', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
@@ -160,5 +165,4 @@ const styles = (theme) => ({
     postBtn: { background: 'none', border: 'none', color: '#0095f6', fontWeight: 'bold', cursor: 'pointer', paddingLeft: '10px' }
 });
 
-// WRAP IN MEMO (Performance Boost)
-export default memo(Post);
+export default Post;
