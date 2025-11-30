@@ -4,12 +4,12 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const http = require('http');
+const fs = require('fs'); // <--- Import FS
 const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
 
-// 1. ALLOW ALL CONNECTIONS (Fixes Network Error)
 const io = new Server(server, {
     cors: {
         origin: "*", 
@@ -19,7 +19,16 @@ const io = new Server(server, {
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// --- CRITICAL FIX: Create 'uploads' folder if it doesn't exist ---
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir);
+    console.log("Created 'uploads' directory");
+}
+
+// Serve the static files
+app.use('/uploads', express.static(uploadDir));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -29,7 +38,7 @@ app.use('/api/stories', require('./routes/stories'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/notifications', require('./routes/notifications'));
 
-// Socket.io Logic
+// Socket Logic
 let onlineUsers = []; 
 io.on('connection', (socket) => {
     socket.on("add_user", (userId) => {
