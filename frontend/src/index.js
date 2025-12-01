@@ -13,5 +13,5 @@ root.render(
   </React.StrictMode>
 );
 
-// 🔴 CHANGE THIS: from .register() back to .unregister()
+// ⚠️ THIS MUST BE UNREGISTER
 serviceWorkerRegistration.unregister();
