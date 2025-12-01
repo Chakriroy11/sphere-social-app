@@ -14,98 +14,173 @@ const HomePage = () => {
     const [unreadCount, setUnreadCount] = useState(0);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [viewStory, setViewStory] = useState(null);
+    
+    // Infinite Scroll & Loading States
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const [loading, setLoading] = useState(true);
 
     const { user } = useContext(AuthContext);
     const { theme } = useContext(ThemeContext);
+    
     const fileInputRef = useRef(null);
 
+    // --- URL HELPER (THE FIX) ---
+    const getImgUrl = (path) => {
+        if (!path) return "";
+        // 1. If it's a Cloudinary URL, ensure HTTPS
+        if (path.startsWith('http')) {
+            return path.replace('http:', 'https:');
+        }
+        // 2. Fallback for old Render disk files (might be broken, but safe to try)
+        return `https://sphere-backend-2mx3.onrender.com${path}`;
+    };
+
+    // Initial Fetch
     const fetchData = async () => {
+        setLoading(true);
         try {
             const [postsRes, storiesRes, notifRes] = await Promise.all([
                 postService.getPosts(1),
                 postService.getStories(),
                 postService.getNotifications()
             ]);
+            
             setPosts(postsRes.data);
             setStories(storiesRes.data);
             setUnreadCount(notifRes.data.length);
-        } catch (error) { console.error("Failed to fetch data", error); }
+        } catch (error) {
+            console.error("Failed to fetch data", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    // URL Helper
-    const getImgUrl = (path) => {
-        if (!path) return "";
-        if (path.startsWith('http')) return path;
-        return `https://sphere-backend-2mx3.onrender.com${path}`;
+    const fetchMorePosts = async () => {
+        if (!hasMore) return;
+        try {
+            const nextPage = page + 1;
+            const res = await postService.getPosts(nextPage);
+            
+            if (res.data.length === 0) {
+                setHasMore(false);
+            } else {
+                setPosts(prev => [...prev, ...res.data]);
+                setPage(nextPage);
+            }
+        } catch (error) { console.error(error); }
     };
 
-    // ... (Keep loadMore, story upload, post creation logic same as before)
-    const fetchMorePosts = async () => { if (!hasMore) return; try { const nextPage = page + 1; const res = await postService.getPosts(nextPage); if (res.data.length === 0) { setHasMore(false); } else { setPosts(prev => [...prev, ...res.data]); setPage(nextPage); } } catch (error) { console.error(error); } };
-    const handleStoryUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { await postService.addStory(file); fetchData(); toast.success("Story added!"); } catch (error) { toast.error("Failed"); } };
-    const removePost = (id) => { setPosts(posts.filter(post => post._id !== id)); toast.info("Post deleted."); };
-    const handlePostCreated = () => { setPage(1); setHasMore(true); fetchData(); setIsModalOpen(false); toast.success("Post created!"); };
-
-    const myStories = stories.filter(s => s.user._id === user?._id);
-    const otherStories = stories.filter(s => s.user._id !== user?._id);
-    
     useEffect(() => {
         fetchData();
-        const handleScroll = () => { if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 50) fetchMorePosts(); };
+        const handleScroll = () => {
+            if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 50) {
+                fetchMorePosts();
+            }
+        };
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
+    const handleStoryUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            await postService.addStory(file);
+            // Refresh just the stories
+            const storiesRes = await postService.getStories();
+            setStories(storiesRes.data);
+            toast.success("Story added successfully! 📸");
+        } catch (error) {
+            toast.error("Failed to upload story");
+        }
+    };
+
+    const removePost = (id) => {
+        setPosts(posts.filter(post => post._id !== id));
+        toast.info("Post deleted.");
+    };
+
+    const handlePostCreated = () => {
+        setPage(1);
+        setHasMore(true);
+        fetchData(); 
+        setIsModalOpen(false);
+        toast.success("Post created! 🚀");
+    };
+
+    const myStories = stories.filter(s => s.user._id === user?._id);
+    const otherStories = stories.filter(s => s.user._id !== user?._id);
     const s = styles(theme);
 
     return (
         <div style={s.mainContainer}>
+            {/* Header */}
             <div style={s.header}>
                 <h2 style={{ margin: 0, fontSize: '1.4rem', color: theme.text }}>Sphere</h2>
-                <Link to="/chat" style={{ textDecoration: 'none', color: '#007bff', display: 'flex', alignItems: 'center' }}><FaCommentDots size={28} /></Link>
+                <Link to="/chat" style={{ textDecoration: 'none', color: '#007bff', display: 'flex', alignItems: 'center' }}>
+                    <FaCommentDots size={28} />
+                </Link>
             </div>
 
-            <div style={s.storiesContainer}>
-                <div style={s.storyItem}>
-                    <input type="file" ref={fileInputRef} style={{display: 'none'}} accept="image/*,video/*" onChange={handleStoryUpload} />
-                    {myStories.length > 0 ? (
-                        <div style={{position: 'relative'}}>
-                            <div style={s.myStoryActive} onClick={() => setViewStory(myStories[0])}>
-                                <img src={getImgUrl(myStories[0].imageUrl)} alt="My Story" style={s.storyThumbnail} />
+            {loading ? (
+                <div style={{textAlign:'center', padding:'50px', color:'#007bff'}}><h2>Loading...</h2></div>
+            ) : (
+                <>
+                    {/* Stories */}
+                    <div style={s.storiesContainer}>
+                        {/* My Story */}
+                        <div style={s.storyItem}>
+                            <input type="file" ref={fileInputRef} style={{display: 'none'}} accept="image/*,video/*" onChange={handleStoryUpload} />
+                            {myStories.length > 0 ? (
+                                <div style={{position: 'relative'}}>
+                                    <div style={s.myStoryActive} onClick={() => setViewStory(myStories[0])}>
+                                        <img src={getImgUrl(myStories[0].imageUrl)} alt="My Story" style={s.storyThumbnail} />
+                                    </div>
+                                    <div style={s.addBadge} onClick={(e) => { e.stopPropagation(); fileInputRef.current.click(); }}>+</div>
+                                </div>
+                            ) : (
+                                <div style={s.myStoryCircle} onClick={() => fileInputRef.current.click()}>
+                                    <div style={s.myStoryInner}><span style={{fontSize: '1.5rem', marginTop: '-3px'}}>+</span></div>
+                                </div>
+                            )}
+                            <span style={s.storyUsername}>Your Story</span>
+                        </div>
+
+                        {/* Other Stories */}
+                        {otherStories.map((story) => (
+                            <div key={story._id} style={s.storyItem} onClick={() => setViewStory(story)}>
+                                <div style={s.storyCircle}>
+                                    {story.user.profilePic ? (
+                                        <img src={getImgUrl(story.user.profilePic)} style={{width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover', border: '2px solid white'}} />
+                                    ) : <div style={s.storyInner}>{story.user.username[0].toUpperCase()}</div>}
+                                </div>
+                                <span style={s.storyUsername}>{story.user.username.slice(0, 8)}...</span>
                             </div>
-                            <div style={s.addBadge} onClick={(e) => { e.stopPropagation(); fileInputRef.current.click(); }}>+</div>
-                        </div>
-                    ) : (
-                        <div style={s.myStoryCircle} onClick={() => fileInputRef.current.click()}><div style={s.myStoryInner}><span style={{fontSize: '1.5rem', marginTop: '-3px'}}>+</span></div></div>
-                    )}
-                    <span style={s.storyUsername}>Your Story</span>
-                </div>
-                {otherStories.map((story) => (
-                    <div key={story._id} style={s.storyItem} onClick={() => setViewStory(story)}>
-                        <div style={s.storyCircle}>
-                            {story.user.profilePic ? (
-                                <img src={getImgUrl(story.user.profilePic)} style={{width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover', border: '2px solid white'}} />
-                            ) : <div style={s.storyInner}>{story.user.username[0].toUpperCase()}</div>}
-                        </div>
-                        <span style={s.storyUsername}>{story.user.username.slice(0, 8)}...</span>
+                        ))}
                     </div>
-                ))}
-            </div>
 
-            <div style={s.feedContainer}>
-                {posts.map(post => <Post key={post._id} post={post} onDelete={removePost} />)}
-                {!hasMore && <p style={{ textAlign: 'center', color: theme.textSecondary, marginTop: '20px' }}>You're all caught up!</p>}
-            </div>
+                    {/* Feed */}
+                    <div style={s.feedContainer}>
+                        {posts.map(post => <Post key={post._id} post={post} onDelete={removePost} />)}
+                        {!hasMore && posts.length > 0 && <p style={{ textAlign: 'center', color: theme.textSecondary, marginTop: '20px', marginBottom: '20px' }}>You're all caught up! ✅</p>}
+                    </div>
+                </>
+            )}
 
+            {/* Bottom Nav */}
             <div style={s.bottomNav}>
                 <button style={s.navItem} onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}><FaHome size={26} /></button>
                 <Link to="/search" style={s.navItem}><FaSearch size={26} /></Link>
                 <button onClick={() => setIsModalOpen(true)} style={s.navItem}><FaPlusSquare size={30} /></button>
-                <Link to="/notifications" style={{...s.navItem, position: 'relative'}}><FaBell size={26} />{unreadCount > 0 && <span style={s.notificationBadge}>{unreadCount}</span>}</Link>
+                <Link to="/notifications" style={{...s.navItem, position: 'relative'}}>
+                    <FaBell size={26} />
+                    {unreadCount > 0 && <span style={s.notificationBadge}>{unreadCount}</span>}
+                </Link>
                 <Link to={`/profile/${user?._id}`} style={s.navItem}><FaUser size={26} /></Link>
             </div>
 
+            {/* Modals */}
             {isModalOpen && (
                 <div style={s.modalOverlay} onClick={() => setIsModalOpen(false)}>
                     <div style={s.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -117,7 +192,10 @@ const HomePage = () => {
             {viewStory && (
                 <div style={s.storyOverlay} onClick={() => setViewStory(null)}>
                     <div style={s.storyContent} onClick={(e) => e.stopPropagation()}>
-                        {viewStory.imageUrl.endsWith('.mp4') ? <video src={getImgUrl(viewStory.imageUrl)} style={s.storyImage} autoPlay loop controls /> : <img src={getImgUrl(viewStory.imageUrl)} alt="Story" style={s.storyImage} />}
+                        {viewStory.imageUrl.endsWith('.mp4') ? 
+                            <video src={getImgUrl(viewStory.imageUrl)} style={s.storyImage} autoPlay loop controls /> : 
+                            <img src={getImgUrl(viewStory.imageUrl)} alt="Story" style={s.storyImage} />
+                        }
                         <div style={s.storyFooter}><strong>@{viewStory.user.username}</strong><button onClick={() => setViewStory(null)} style={s.closeStoryBtn}>Close</button></div>
                     </div>
                 </div>
