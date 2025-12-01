@@ -21,20 +21,18 @@ const HomePage = () => {
 
     const { user } = useContext(AuthContext);
     const { theme } = useContext(ThemeContext);
+    
     const fileInputRef = useRef(null);
 
-    // --- URL HELPER (PERMANENT FIX) ---
+    // URL Helper
     const getImgUrl = (path) => {
         if (!path) return "";
-        // 1. Cloudinary: Force HTTPS
         if (path.startsWith('http')) {
             return path.replace('http:', 'https:');
         }
-        // 2. Fallback for old Render disk files
         return `https://sphere-backend-2mx3.onrender.com${path}`;
     };
 
-    // Initial Data Fetch
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -54,7 +52,6 @@ const HomePage = () => {
         }
     };
 
-    // Infinite Scroll Fetch
     const fetchMorePosts = async () => {
         if (!hasMore) return;
         try {
@@ -107,13 +104,14 @@ const HomePage = () => {
         toast.success("Post created! 🚀");
     };
 
-    const myStories = stories.filter(s => s.user._id === user?._id);
-    const otherStories = stories.filter(s => s.user._id !== user?._id);
+    // --- CRITICAL FIX HERE: Added 's.user &&' check ---
+    const myStories = stories.filter(s => s.user && s.user._id === user?._id);
+    const otherStories = stories.filter(s => s.user && s.user._id !== user?._id);
+
     const s = styles(theme);
 
     return (
         <div style={s.mainContainer}>
-            {/* Header */}
             <div style={s.header}>
                 <h2 style={{ margin: 0, fontSize: '1.4rem', color: theme.text }}>Sphere</h2>
                 <Link to="/chat" style={{ textDecoration: 'none', color: '#007bff', display: 'flex', alignItems: 'center' }}>
@@ -125,9 +123,7 @@ const HomePage = () => {
                 <div style={{textAlign:'center', padding:'50px', color:'#007bff'}}><h2>Loading...</h2></div>
             ) : (
                 <>
-                    {/* Stories */}
                     <div style={s.storiesContainer}>
-                        {/* My Story */}
                         <div style={s.storyItem}>
                             <input type="file" ref={fileInputRef} style={{display: 'none'}} accept="image/*,video/*" onChange={handleStoryUpload} />
                             {myStories.length > 0 ? (
@@ -145,20 +141,18 @@ const HomePage = () => {
                             <span style={s.storyUsername}>Your Story</span>
                         </div>
 
-                        {/* Other Stories */}
                         {otherStories.map((story) => (
                             <div key={story._id} style={s.storyItem} onClick={() => setViewStory(story)}>
                                 <div style={s.storyCircle}>
                                     {story.user.profilePic ? (
                                         <img src={getImgUrl(story.user.profilePic)} style={{width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover', border: '2px solid white'}} />
-                                    ) : <div style={s.storyInner}>{story.user.username[0].toUpperCase()}</div>}
+                                    ) : <div style={s.storyInner}>{story.user.username ? story.user.username[0].toUpperCase() : "?"}</div>}
                                 </div>
-                                <span style={s.storyUsername}>{story.user.username.slice(0, 8)}...</span>
+                                <span style={s.storyUsername}>{story.user.username ? story.user.username.slice(0, 8) : "User"}...</span>
                             </div>
                         ))}
                     </div>
 
-                    {/* Feed */}
                     <div style={s.feedContainer}>
                         {posts.map(post => <Post key={post._id} post={post} onDelete={removePost} />)}
                         {!hasMore && posts.length > 0 && <p style={{ textAlign: 'center', color: theme.textSecondary, marginTop: '20px', marginBottom: '20px' }}>You're all caught up! ✅</p>}
@@ -166,7 +160,6 @@ const HomePage = () => {
                 </>
             )}
 
-            {/* Bottom Nav */}
             <div style={s.bottomNav}>
                 <button style={s.navItem} onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}><FaHome size={26} /></button>
                 <Link to="/search" style={s.navItem}><FaSearch size={26} /></Link>
@@ -178,7 +171,6 @@ const HomePage = () => {
                 <Link to={`/profile/${user?._id}`} style={s.navItem}><FaUser size={26} /></Link>
             </div>
 
-            {/* Create Post Modal */}
             {isModalOpen && (
                 <div style={s.modalOverlay} onClick={() => setIsModalOpen(false)}>
                     <div style={s.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -187,8 +179,7 @@ const HomePage = () => {
                     </div>
                 </div>
             )}
-
-            {/* View Story Modal */}
+            
             {viewStory && (
                 <div style={s.storyOverlay} onClick={() => setViewStory(null)}>
                     <div style={s.storyContent} onClick={(e) => e.stopPropagation()}>
