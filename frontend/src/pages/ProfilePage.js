@@ -20,6 +20,7 @@ const ProfilePage = () => {
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isFollowing, setIsFollowing] = useState(false);
+    
     const [editMode, setEditMode] = useState(false);
     const [bio, setBio] = useState("");
     const [file, setFile] = useState(null);
@@ -29,7 +30,7 @@ const ProfilePage = () => {
     const isMyProfile = user && user._id === userId;
     const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm'));
 
-    // --- URL HELPER (THE FIX) ---
+    // --- URL HELPER ---
     const getImgUrl = (path) => {
         if (!path) return null;
         if (path.startsWith('http')) return path.replace('http:', 'https:');
@@ -43,6 +44,7 @@ const ProfilePage = () => {
                 setProfileUser(userRes.data);
                 setBio(userRes.data.bio || "");
                 setIsFollowing(userRes.data.followers.includes(user?._id));
+
                 const postsRes = await postService.getPostsByUser(userId);
                 setPosts(postsRes.data);
             } catch (error) { console.error("Error fetching profile", error); } 
@@ -106,8 +108,13 @@ const ProfilePage = () => {
 
             <div style={s.profileCard}>
                 <div style={s.avatarLarge}>
-                    {profileUser.profilePic ? <img src={getImgUrl(profileUser.profilePic)} alt="Profile" style={{width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover'}} /> : profileUser.username[0].toUpperCase()}
+                    {profileUser.profilePic ? (
+                        <img src={getImgUrl(profileUser.profilePic)} alt="Profile" style={{width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover'}} />
+                    ) : (
+                        profileUser.username[0].toUpperCase()
+                    )}
                 </div>
+
                 {editMode ? (
                     <form onSubmit={handleUpdateProfile} style={s.editForm}>
                         <label style={s.fileLabel}><FaCamera /> Change Photo <input type="file" style={{display: 'none'}} onChange={(e) => setFile(e.target.files[0])} /></label>
@@ -171,7 +178,6 @@ const ProfilePage = () => {
     );
 };
 
-// ... (Styles kept consistent)
 const styles = (theme) => ({
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 20px', borderBottom: `1px solid ${theme.border}`, backgroundColor: theme.cardBg, color: theme.text },
     logoutBtn: { backgroundColor: 'transparent', color: '#ff4444', border: 'none', cursor: 'pointer' },

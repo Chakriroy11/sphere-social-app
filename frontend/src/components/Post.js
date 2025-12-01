@@ -48,10 +48,10 @@ const Post = ({ post, onDelete }) => {
     const isOwner = user && post.author._id === user._id;
     const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm'));
 
-    // URL Helper: Handles both Cloudinary (http) and Old Local (relative) paths
+    // --- URL HELPER ---
     const getImgUrl = (path) => {
         if (!path) return null;
-        if (path.startsWith('http')) return path;
+        if (path.startsWith('http')) return path.replace('http:', 'https:');
         return `https://sphere-backend-2mx3.onrender.com${path}`;
     };
 
@@ -87,6 +87,7 @@ const Post = ({ post, onDelete }) => {
                         <span style={s.time}>{timeAgo(post.createdAt)}</span>
                     </div>
                 </div>
+                
                 {isOwner && (
                     <div style={{display: 'flex', gap: '10px'}}>
                         <button onClick={() => setIsEditing(!isEditing)} style={s.actionIconBtn}><FaPen size={14} color={theme.textSecondary} /></button>
@@ -116,11 +117,7 @@ const Post = ({ post, onDelete }) => {
                         alt="Post" 
                         style={s.image} 
                         loading="lazy"
-                        // FIX FOR BROKEN IMAGES:
-                        onError={(e) => { 
-                            e.target.onerror = null; 
-                            e.target.src = "https://via.placeholder.com/500x300?text=Image+Expired"; 
-                        }}
+                        onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/500x300?text=Image+Expired"; }}
                     />
                 )
             )}
@@ -143,7 +140,6 @@ const Post = ({ post, onDelete }) => {
     );
 };
 
-// ... (Keep styles consistent)
 const styles = (theme) => ({
     card: { backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: '8px', marginBottom: '20px', padding: '15px' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },

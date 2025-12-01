@@ -18,29 +18,25 @@ const HomePage = () => {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [loading, setLoading] = useState(true);
-    
-    // NEW: State to show "Waking Up" message if it takes too long
-    const [showWakeUpMsg, setShowWakeUpMsg] = useState(false);
 
     const { user } = useContext(AuthContext);
     const { theme } = useContext(ThemeContext);
-    
     const fileInputRef = useRef(null);
 
+    // --- URL HELPER (PERMANENT FIX) ---
     const getImgUrl = (path) => {
         if (!path) return "";
-        if (path.startsWith('http')) return path.replace('http:', 'https:');
+        // 1. Cloudinary: Force HTTPS
+        if (path.startsWith('http')) {
+            return path.replace('http:', 'https:');
+        }
+        // 2. Fallback for old Render disk files
         return `https://sphere-backend-2mx3.onrender.com${path}`;
     };
 
+    // Initial Data Fetch
     const fetchData = async () => {
         setLoading(true);
-        
-        // If it takes more than 3 seconds, show the "Waking Up" message
-        const timer = setTimeout(() => {
-            setShowWakeUpMsg(true);
-        }, 3000);
-
         try {
             const [postsRes, storiesRes, notifRes] = await Promise.all([
                 postService.getPosts(1),
@@ -54,17 +50,17 @@ const HomePage = () => {
         } catch (error) {
             console.error("Failed to fetch data", error);
         } finally {
-            clearTimeout(timer); // Clear timer
             setLoading(false);
-            setShowWakeUpMsg(false); // Hide message
         }
     };
 
+    // Infinite Scroll Fetch
     const fetchMorePosts = async () => {
         if (!hasMore) return;
         try {
             const nextPage = page + 1;
             const res = await postService.getPosts(nextPage);
+            
             if (res.data.length === 0) {
                 setHasMore(false);
             } else {
@@ -93,7 +89,9 @@ const HomePage = () => {
             const storiesRes = await postService.getStories();
             setStories(storiesRes.data);
             toast.success("Story added successfully! 📸");
-        } catch (error) { toast.error("Failed to upload story"); }
+        } catch (error) {
+            toast.error("Failed to upload story");
+        }
     };
 
     const removePost = (id) => {
@@ -115,6 +113,7 @@ const HomePage = () => {
 
     return (
         <div style={s.mainContainer}>
+            {/* Header */}
             <div style={s.header}>
                 <h2 style={{ margin: 0, fontSize: '1.4rem', color: theme.text }}>Sphere</h2>
                 <Link to="/chat" style={{ textDecoration: 'none', color: '#007bff', display: 'flex', alignItems: 'center' }}>
@@ -123,17 +122,12 @@ const HomePage = () => {
             </div>
 
             {loading ? (
-                <div style={{textAlign:'center', padding:'50px', color:'#007bff'}}>
-                    <h2>Loading Sphere...</h2>
-                    {showWakeUpMsg && (
-                        <p style={{color: theme.textSecondary, marginTop: '10px', fontSize: '0.9rem'}}>
-                            (Server is waking up from free-tier sleep mode. <br/> This may take up to 30 seconds. Please wait!)
-                        </p>
-                    )}
-                </div>
+                <div style={{textAlign:'center', padding:'50px', color:'#007bff'}}><h2>Loading...</h2></div>
             ) : (
                 <>
+                    {/* Stories */}
                     <div style={s.storiesContainer}>
+                        {/* My Story */}
                         <div style={s.storyItem}>
                             <input type="file" ref={fileInputRef} style={{display: 'none'}} accept="image/*,video/*" onChange={handleStoryUpload} />
                             {myStories.length > 0 ? (
@@ -150,6 +144,8 @@ const HomePage = () => {
                             )}
                             <span style={s.storyUsername}>Your Story</span>
                         </div>
+
+                        {/* Other Stories */}
                         {otherStories.map((story) => (
                             <div key={story._id} style={s.storyItem} onClick={() => setViewStory(story)}>
                                 <div style={s.storyCircle}>
@@ -162,6 +158,7 @@ const HomePage = () => {
                         ))}
                     </div>
 
+                    {/* Feed */}
                     <div style={s.feedContainer}>
                         {posts.map(post => <Post key={post._id} post={post} onDelete={removePost} />)}
                         {!hasMore && posts.length > 0 && <p style={{ textAlign: 'center', color: theme.textSecondary, marginTop: '20px', marginBottom: '20px' }}>You're all caught up! ✅</p>}
@@ -169,6 +166,7 @@ const HomePage = () => {
                 </>
             )}
 
+            {/* Bottom Nav */}
             <div style={s.bottomNav}>
                 <button style={s.navItem} onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}><FaHome size={26} /></button>
                 <Link to="/search" style={s.navItem}><FaSearch size={26} /></Link>
@@ -180,6 +178,7 @@ const HomePage = () => {
                 <Link to={`/profile/${user?._id}`} style={s.navItem}><FaUser size={26} /></Link>
             </div>
 
+            {/* Create Post Modal */}
             {isModalOpen && (
                 <div style={s.modalOverlay} onClick={() => setIsModalOpen(false)}>
                     <div style={s.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -188,6 +187,8 @@ const HomePage = () => {
                     </div>
                 </div>
             )}
+
+            {/* View Story Modal */}
             {viewStory && (
                 <div style={s.storyOverlay} onClick={() => setViewStory(null)}>
                     <div style={s.storyContent} onClick={(e) => e.stopPropagation()}>
