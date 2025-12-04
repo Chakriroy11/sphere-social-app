@@ -6,7 +6,7 @@ import userService from '../services/userService';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { FaCheckDouble, FaArrowLeft, FaPaperPlane } from 'react-icons/fa';
 
-// Connect to LIVE Backend
+// ✅ LIVE BACKEND CONNECTION
 const socket = io.connect("https://sphere-backend-2mx3.onrender.com");
 const API_BASE = "https://sphere-backend-2mx3.onrender.com/api";
 
@@ -22,21 +22,22 @@ const ChatPage = () => {
     
     const messagesEndRef = useRef(null);
 
-    // 1. Fetch Friends
+    // 1. Fetch Friends (Safety Check Included)
     useEffect(() => {
         const getFriends = async () => {
             try {
                 if (user?._id) {
                     const res = await userService.getUser(user._id);
+                    // Filter out any null/broken user links
                     const validFriends = (res.data.following || []).filter(f => f && f.username);
                     setFriends(validFriends);
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) { console.error("Error fetching friends:", err); }
         };
         getFriends();
     }, [user]);
 
-    // 2. Auto-Join Room
+    // 2. Auto-Join Room Logic
     useEffect(() => {
         if (roomId) {
             socket.emit("join_room", roomId);
@@ -48,11 +49,13 @@ const ChatPage = () => {
         try {
             const res = await axios.get(`${API_BASE}/messages/${id}`);
             setMessageList(res.data);
+            
+            // Mark messages as read
             if (user?.username) {
                 await axios.put(`${API_BASE}/messages/read/${id}`, { username: user.username });
             }
             scrollToBottom();
-        } catch (err) { console.error(err); }
+        } catch (err) { console.error("Error fetching history:", err); }
     };
 
     const sendMessage = async () => {
@@ -65,17 +68,16 @@ const ChatPage = () => {
                 time: new Date(Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
 
-            // 1. INSTANTLY Update UI (This makes it show in the chatpage)
+            // Optimistic UI Update
             setMessageList((list) => [...list, messageData]);
-            setCurrentMessage(""); // Clear input immediately
-
-            // 2. Send via Socket (To other user)
+            setCurrentMessage("");
+            
+            // Send via Socket
             await socket.emit("send_message", messageData);
             socket.emit("stop_typing", { room: roomId }); 
             
-            // 3. Save to Database (Background)
+            // Save to DB
             await axios.post(`${API_BASE}/messages`, messageData);
-            
             scrollToBottom();
         }
     };
@@ -92,11 +94,14 @@ const ChatPage = () => {
     const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); };
     useEffect(() => { scrollToBottom(); }, [messageList, isTyping]);
 
+    // Socket Listeners
     useEffect(() => {
         const receiveMessage = (data) => setMessageList((list) => [...list, data]);
+        
         socket.on("receive_message", receiveMessage);
         socket.on("display_typing", (data) => { if (data.user !== user?.username) setIsTyping(true); });
         socket.on("hide_typing", () => setIsTyping(false));
+        
         return () => { 
             socket.off("receive_message", receiveMessage); 
             socket.off("display_typing");
@@ -105,13 +110,22 @@ const ChatPage = () => {
     }, [user]);
 
     const openChat = (friendId) => {
+        // Unique Room ID: Sort IDs alphabetically to ensure both users get same room
         const newRoomId = [user._id, friendId].sort().join("_");
         navigate(`/chat/${newRoomId}`);
     };
 
+    // Mobile Responsiveness
     const isMobile = window.innerWidth <= 768;
     const showSidebar = !roomId || !isMobile;
     const showChatArea = roomId || !isMobile;
+
+    // Image URL Helper
+    const getImgUrl = (path) => {
+        if (!path) return null;
+        if (path.startsWith('http')) return path.replace('http:', 'https:');
+        return `https://sphere-backend-2mx3.onrender.com${path}`;
+    };
 
     return (
         <div style={styles.container}>
@@ -126,15 +140,17 @@ const ChatPage = () => {
                         {friends.length === 0 && <p style={{padding: '20px', color: '#999'}}>Follow people to chat!</p>}
                         
                         {friends.map((friend) => {
-                            if (!friend) return null;
+                            if (!friend || !friend.username) return null;
+
                             const isOnline = onlineUsers.some(u => u.userId === friend._id);
-                            const initial = friend.username ? friend.username.charAt(0).toUpperCase() : "?";
+                            const initial = friend.username.charAt(0).toUpperCase();
+                            const avatarUrl = getImgUrl(friend.profilePic);
 
                             return (
                                 <div key={friend._id} onClick={() => openChat(friend._id)} style={styles.friendItem}>
                                     <div style={{position: 'relative'}}>
-                                        {friend.profilePic ? (
-                                            <img src={`https://sphere-backend-2mx3.onrender.com${friend.profilePic}`} alt="pic" style={styles.avatar} />
+                                        {avatarUrl ? (
+                                            <img src={avatarUrl} alt="pic" style={styles.avatar} />
                                         ) : (
                                             <div style={styles.avatarPlaceholder}>{initial}</div>
                                         )}
@@ -205,6 +221,8 @@ const ChatPage = () => {
 
 const styles = {
     container: { display: 'flex', height: '100vh', backgroundColor: '#f0f2f5' },
+    
+    // Sidebar
     sidebar: { backgroundColor: 'white', borderRight: '1px solid #ddd', display: 'flex', flexDirection: 'column' },
     sidebarHeader: { padding: '20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', height: '60px', boxSizing: 'border-box' },
     friendList: { flex: 1, overflowY: 'auto' },
@@ -213,11 +231,15 @@ const styles = {
     avatar: { width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover' },
     avatarPlaceholder: { width: '45px', height: '45px', borderRadius: '50%', backgroundColor: '#007bff', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
     onlineBadge: { width: '12px', height: '12px', backgroundColor: '#31a24c', borderRadius: '50%', position: 'absolute', bottom: '0', right: '0', border: '2px solid white' },
+
+    // Chat Area
     chatArea: { flex: 1, display: 'flex', flexDirection: 'column' },
     chatHeader: { height: '60px', backgroundColor: 'white', borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', padding: '0 20px' },
     backBtn: { marginRight: '10px', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' },
     chatBody: { flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' },
     emptyState: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' },
+    
+    // Messages
     messageRowMe: { display: 'flex', justifyContent: 'flex-end' },
     messageRowOther: { display: 'flex', justifyContent: 'flex-start' },
     bubbleMe: { backgroundColor: '#0084ff', color: 'white', padding: '10px 15px', borderRadius: '18px 18px 0 18px', maxWidth: '70%' },
@@ -226,6 +248,8 @@ const styles = {
     timeMe: { fontSize: '0.65rem', color: 'rgba(255,255,255,0.7)' },
     timeOther: { fontSize: '0.65rem', color: '#65676b' },
     typingIndicator: { fontStyle: 'italic', color: '#888', marginLeft: '20px', marginBottom: '10px' },
+    
+    // Footer
     chatFooter: { padding: '15px', backgroundColor: 'white', borderTop: '1px solid #ddd', display: 'flex', gap: '10px' },
     chatInput: { flex: 1, padding: '12px 20px', borderRadius: '25px', border: '1px solid #ddd', outline: 'none', backgroundColor: '#f0f2f5' },
     sendBtn: { width: '45px', height: '45px', borderRadius: '50%', backgroundColor: '#0084ff', color: 'white', border: 'none', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// UPDATED TO RENDER URL
+// ✅ LIVE BACKEND URL
 const BASE_URL = 'https://sphere-backend-2mx3.onrender.com/api/';
 
 const getToken = () => {

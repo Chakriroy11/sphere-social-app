@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// UPDATED TO RENDER URL
+// ✅ LIVE BACKEND URL
 const API_URL = 'https://sphere-backend-2mx3.onrender.com/api/auth/';
 
 const register = (username, email, password) => {
