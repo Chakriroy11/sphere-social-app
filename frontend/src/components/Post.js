@@ -40,15 +40,13 @@ const Post = ({ post, onDelete }) => {
     const [comments, setComments] = useState(post.comments || []);
     const [commentText, setCommentText] = useState('');
     const [saved, setSaved] = useState(false);
-    
+
+    // Edit Mode
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(post.content);
     const [displayContent, setDisplayContent] = useState(post.content);
 
-    const isOwner = user && post.author._id === user._id;
-    const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm'));
-
-    // --- URL HELPER ---
+    // URL Helper
     const getImgUrl = (path) => {
         if (!path) return null;
         if (path.startsWith('http')) return path.replace('http:', 'https:');
@@ -57,13 +55,16 @@ const Post = ({ post, onDelete }) => {
 
     const imageUrl = getImgUrl(post.imageUrl);
     const profilePic = getImgUrl(post.author.profilePic);
+    const isOwner = user && post.author._id === user._id;
+    const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm'));
+
     const s = styles(theme);
 
     const handleLike = async () => { try { await postService.likePost(post._id); setLikeCount(liked ? likeCount - 1 : likeCount + 1); setLiked(!liked); } catch (error) { console.error(error); } };
     const handleSave = async () => { try { await postService.savePost(post._id); setSaved(!saved); } catch (error) { console.error(error); } };
     const handleDelete = async () => { if (window.confirm("Delete?")) { try { await postService.deletePost(post._id); onDelete(post._id); } catch (error) { console.error(error); } } };
     const handleComment = async (e) => { e.preventDefault(); if (!commentText.trim()) return; try { const response = await postService.addComment(post._id, commentText); setComments(response.data.comments); setCommentText(''); } catch (error) { console.error(error); } };
-    
+
     const handleUpdate = async () => {
         try {
             await postService.updatePost(post._id, editContent);
@@ -77,7 +78,12 @@ const Post = ({ post, onDelete }) => {
             <div style={s.header}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {profilePic ? (
-                        <img src={profilePic} alt="avatar" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img 
+                            src={profilePic} 
+                            alt="avatar" 
+                            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} 
+                            onError={(e) => { e.target.src = "https://placehold.co/100x100?text=?"; }} // Fix Profile Pic too
+                        />
                     ) : (
                         <div style={s.avatarPlaceholder}>{post.author.username[0].toUpperCase()}</div>
                     )}
@@ -110,14 +116,18 @@ const Post = ({ post, onDelete }) => {
             
             {imageUrl && (
                 isVideo(imageUrl) ? (
-                    <video controls style={s.image} loop muted playsInline><source src={imageUrl} /></video> 
+                    <video controls style={s.image} loop muted playsInline><source src={imageUrl} type="video/mp4" /></video> 
                 ) : (
                     <img 
                         src={imageUrl} 
                         alt="Post" 
                         style={s.image} 
                         loading="lazy"
-                        onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/500x300?text=Image+Expired"; }}
+                        // ✅ CRITICAL FIX: Changed via.placeholder.com to placehold.co
+                        onError={(e) => { 
+                            e.target.onerror = null; 
+                            e.target.src = "https://placehold.co/600x400?text=Image+Unavailable"; 
+                        }}
                     />
                 )
             )}
