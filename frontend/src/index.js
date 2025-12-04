@@ -13,5 +13,5 @@ root.render(
   </React.StrictMode>
 );
 
-// ⚠️ THIS MUST BE UNREGISTER
+// DISABLE PWA CACHE (Fixes "Long Refresh" issue)
 serviceWorkerRegistration.unregister();

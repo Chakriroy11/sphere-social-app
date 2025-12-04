@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, Suspense, lazy } from 'react'; // Added Suspense, lazy
+import React, { useContext, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { ThemeProvider, ThemeContext } from './context/ThemeContext';
@@ -6,7 +6,7 @@ import io from 'socket.io-client';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// --- LAZY LOAD PAGES (Performance Boost) ---
+// --- LAZY LOAD PAGES (Performance Optimization) ---
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const HomePage = lazy(() => import('./pages/HomePage'));
@@ -16,13 +16,15 @@ const SearchPage = lazy(() => import('./pages/SearchPage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const HashtagPage = lazy(() => import('./pages/HashtagPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage')); // Import 404
 
+// LIVE SOCKET CONNECTION
 const socket = io.connect("https://sphere-backend-2mx3.onrender.com");
 
-// Loading Spinner for Page Transitions
+// Loading Spinner
 const PageLoader = () => (
-    <div style={{display: 'flex', justifyContent: 'center', marginTop: '50px', color: '#007bff'}}>
-        <h3>Loading...</h3>
+    <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#007bff'}}>
+        <h3>Loading Sphere...</h3>
     </div>
 );
 
@@ -50,6 +52,8 @@ const AppRoutes = () => {
             socket.emit("add_user", user._id);
             socket.emit("join_user_room", user._id);
             socket.on("get_users", (users) => setOnlineUsers(users));
+            
+            // Global Notification Listener
             socket.on("get_notification", (data) => {
                 toast.info(`🔔 ${data.senderName} ${data.type}ed you!`);
             });
@@ -60,11 +64,13 @@ const AppRoutes = () => {
         <div style={{ backgroundColor: theme.bg, minHeight: '100vh', color: theme.text }}>
             <ToastContainer position="top-right" autoClose={3000} theme={darkMode ? "dark" : "light"} />
             
-            {/* WRAP ROUTES IN SUSPENSE */}
             <Suspense fallback={<PageLoader />}>
                 <Routes>
+                    {/* Public Routes */}
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />
+                    
+                    {/* Protected Routes */}
                     <Route path="/" element={<RequireAuth><HomePage /></RequireAuth>} />
                     <Route path="/profile/:userId" element={<RequireAuth><ProfilePage /></RequireAuth>} />
                     <Route path="/search" element={<RequireAuth><SearchPage /></RequireAuth>} />
@@ -72,6 +78,9 @@ const AppRoutes = () => {
                     <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
                     <Route path="/chat/:roomId?" element={<RequireAuth><ChatPage /></RequireAuth>} />
                     <Route path="/tags/:tag" element={<RequireAuth><HashtagPage /></RequireAuth>} />
+                    
+                    {/* 404 Catch-All Route (MUST BE LAST) */}
+                    <Route path="*" element={<NotFoundPage />} />
                 </Routes>
             </Suspense>
         </div>
